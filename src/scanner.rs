@@ -19,25 +19,29 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(mut self) -> Vec<Token<'a>> {
+    pub fn scan_tokens(mut self) -> Result<Vec<Token<'a>>, String> {
         let mut tokens = Vec::new();
 
         while !self.is_at_end() {
             self.start = self.current;
             let substring = self.advance();
-            let token_type = self.scan_token(substring);
-            self.add_token(substring, token_type, &mut tokens)
+            let token_type = Self::scan_token(substring);
+        
+            match token_type {
+                Ok(token_type) => self.add_token(substring, token_type, &mut tokens),
+                Err(message) => return Err(message)
+            }
         }
 
-        tokens
+        Ok(tokens)
     }
 
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
 
-    fn scan_token(&mut self, substring: &'a str) -> TokenType {
-        TokenType::from_str(substring).unwrap()
+    fn scan_token(substring: &'a str) -> Result<TokenType, String> {
+        TokenType::from_str(substring)
     }
 
     fn advance(&mut self) -> &'a str {
