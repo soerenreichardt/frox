@@ -74,6 +74,10 @@ impl FromStr for TokenType {
             ";" => Ok(TokenType::Semicolon),
             "*" => Ok(TokenType::Star),
             "/" => Ok(TokenType::Slash),
+            "!" => Ok(TokenType::Bang),
+            "=" => Ok(TokenType::Equal),
+            "<" => Ok(TokenType::Less),
+            ">" => Ok(TokenType::Greater),
             _ => Err(format!("Unexpected character: `{s}`").to_string())
         }
     }
