@@ -21,6 +21,7 @@ impl<'a> Scanner<'a> {
 
     pub fn scan_tokens(mut self) -> Result<Vec<Token<'a>>, String> {
         let mut tokens = Vec::new();
+        let mut errors = Vec::new();
 
         while !self.is_at_end() {
             self.start = self.current;
@@ -29,10 +30,13 @@ impl<'a> Scanner<'a> {
         
             match token_type {
                 Ok(token_type) => self.add_token(substring, token_type, &mut tokens),
-                Err(message) => return Err(message)
+                Err(message) => errors.push(message)
             }
         }
 
+        if errors.len() > 0 {
+            return Err(errors.join(" "));
+        }
         Ok(tokens)
     }
 
@@ -52,5 +56,44 @@ impl<'a> Scanner<'a> {
 
     fn add_token(&self, substring: &'a str, token_type: TokenType, tokens: &mut Vec<Token<'a>>) {
         tokens.push(Token::new(token_type, substring, self.line))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_parse_token_types() {
+        let scanner = Scanner::new("{}(),.-+;*/");
+        let tokens = scanner.scan_tokens().unwrap();
+        let token_types = tokens.iter()
+            .map(|token| &token.token_type)
+            .collect::<Vec<_>>();
+
+        let expected = vec![
+            &TokenType::LeftBrace, 
+            &TokenType::RightBrace, 
+            &TokenType::LeftParen, 
+            &TokenType::RightParen,
+            &TokenType::Comma,
+            &TokenType::Dot,
+            &TokenType::Minus,
+            &TokenType::Plus,
+            &TokenType::Semicolon,
+            &TokenType::Star,
+            &TokenType::Slash
+        ];
+        assert_eq!(expected, token_types);
+    }
+
+    #[test]
+    fn should_return_err_on_unknown_character() {
+        let scanner = Scanner::new("{}[");
+        let tokens = scanner.scan_tokens();
+        let expected = "Unexpected character: `[`".to_string();
+
+        assert_eq!(tokens.is_err(), true);
+        assert_eq!(expected, tokens.err().unwrap());
     }
 }

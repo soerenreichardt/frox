@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     // Single-character tokens
     LeftParen, 
@@ -53,7 +53,7 @@ pub enum TokenType {
 
 #[derive(Debug)]
 pub struct Token<'a> {
-    token_type: TokenType,
+    pub token_type: TokenType,
     lexeme: &'a str,
     line: usize
 }
@@ -73,7 +73,8 @@ impl FromStr for TokenType {
             "+" => Ok(TokenType::Plus),
             ";" => Ok(TokenType::Semicolon),
             "*" => Ok(TokenType::Star),
-            _ => Err(format!("Unexpected character: {s}").to_string())
+            "/" => Ok(TokenType::Slash),
+            _ => Err(format!("Unexpected character: `{s}`").to_string())
         }
     }
 }
