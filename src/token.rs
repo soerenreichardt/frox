@@ -28,7 +28,7 @@ pub enum TokenType<'a> {
     //Literals
     Identifier,
     String(&'a str),
-    Number,
+    Number(f64),
 
     //Keywords
     And,
@@ -56,7 +56,7 @@ pub enum Literal<'a> {
     String(&'a str)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Token<'a> {
     pub token_type: TokenType<'a>,
     lexeme: &'a str,
