@@ -44,17 +44,18 @@ impl<'a> Scanner<'a> {
         self.current >= self.source.len()
     }
 
-    fn scan_token(&mut self, substring: &'a str) -> Result<TokenType, String> {
+    fn scan_token(&mut self, substring: &'a str) -> Result<TokenType<'a>, String> {
         match substring {
             " " | "\r" | "\t" => {
                 let substring = self.advance();
                 self.scan_token(substring)
-            }
+            },
             "\n" => {
                 self.line += 1;
                 let substring = self.advance();
                 self.scan_token(substring)
-            }
+            },
+            "\"" => self.parse_string_literal(),
             _ => match TokenType::from_str(substring) {
                 b@Ok(TokenType::Bang) => if self.match_token("=") { Ok(TokenType::BangEqual) } else { b },
                 e@Ok(TokenType::Equal) => if self.match_token("=") { Ok(TokenType::EqualEqual) } else { e },
@@ -90,7 +91,7 @@ impl<'a> Scanner<'a> {
         self.source.get(self.current..self.current+1).unwrap()
     }
 
-    fn add_token(&self, substring: &'a str, token_type: TokenType, tokens: &mut Vec<Token<'a>>) {
+    fn add_token(&self, substring: &'a str, token_type: TokenType<'a>, tokens: &mut Vec<Token<'a>>) {
         tokens.push(Token::new(token_type, substring, self.line))
     }
 
@@ -104,6 +105,24 @@ impl<'a> Scanner<'a> {
 
         self.current += 1;
         true
+    }
+
+    fn parse_string_literal(&mut self) -> Result<TokenType<'a>, String> {
+        while self.peek() != "\"" && !self.is_at_end() {
+            if self.peek() == "\n" {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return Err("Unterminated string.".to_string());
+        }
+
+        self.advance();
+
+        let value = &self.source[self.start + 1..self.current - 1];
+        Ok(TokenType::String(value))
     }
 }
 
@@ -190,6 +209,17 @@ mod tests {
 
         assert_eq!(vec![&TokenType::LeftParen, &TokenType::RightParen], token_types);
         assert_eq!(3, scanner.line);
+    }
+
+    #[test]
+    fn should_parse_string_literals() {
+        let mut scanner = Scanner::new("\"literally a string\"");
+        let tokens = scanner.scan_tokens().unwrap();
+        let token_types = tokens.iter()
+            .map(|token| &token.token_type)
+            .collect::<Vec<_>>();
+
+        assert_eq!(vec![&TokenType::String("literally a string")], token_types);
     }
 
     #[test]
