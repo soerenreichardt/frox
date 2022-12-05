@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr};
 
 use crate::token::*;
 
@@ -30,7 +30,7 @@ impl<'a> Scanner<'a> {
 
             match token_type {
                 Ok(token_type) => self.add_token(token_type, &mut tokens),
-                Err(message) => errors.push(message)
+                Err(message) => errors.push(self.format_error(message))
             }
         }
 
@@ -178,6 +178,28 @@ impl<'a> Scanner<'a> {
             },
             other => other
         }
+    }
+
+    fn format_error(&self, message: String) -> String {
+        let source = self.source;
+        let mut current = self.current;
+
+        let lines = source.lines().collect::<Vec<_>>();
+        for line in &lines[0..self.line-1] {
+            current -= line.len();
+        }
+
+        let error_line = lines[self.line - 1];
+        let spacing = " ".repeat(current - 1);
+        let marker = format!("{}^", spacing);
+        let message = format!("{}{}", spacing, message);
+        format!(
+            "Error occured on line {}:\n{}\n{}\n{}", 
+            self.line, 
+            error_line, 
+            marker, 
+            message
+        ) 
     }
 
     fn is_digit(substring: &'a str) -> bool {
@@ -338,7 +360,7 @@ mod tests {
     fn should_return_err_on_unknown_character() {
         let mut scanner = Scanner::new("{}[");
         let tokens = scanner.scan_tokens();
-        let expected = "Unexpected character: `[`".to_string();
+        let expected = format!("Error occured on line 1:\n{{}}[\n  ^\n  Unexpected character: `[`").to_string();
 
         assert_eq!(tokens.is_err(), true);
         assert_eq!(expected, tokens.err().unwrap());
