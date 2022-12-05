@@ -29,8 +29,11 @@ impl<'a> Scanner<'a> {
             let token_type = self.scan_token(substring);
 
             match token_type {
-                Ok(token_type) => self.add_token(token_type, &mut tokens),
-                Err(message) => errors.push(self.format_error(message))
+                Some(token_type) => match token_type {
+                    Ok(token_type) =>  self.add_token(token_type, &mut tokens),
+                    Err(message) => errors.push(self.format_error(message))
+                },
+                None => continue
             }
         }
 
@@ -44,14 +47,14 @@ impl<'a> Scanner<'a> {
         self.current >= self.source.len()
     }
 
-    fn scan_token(&mut self, substring: &'a str) -> Result<TokenType<'a>, String> {
+    fn scan_token(&mut self, substring: &'a str) -> Option<Result<TokenType<'a>, String>> {
         match substring {
             " " | "\r" | "\t" => {
-                self.parse_whitespace()
+                None
             },
             "\n" => {
                 self.line += 1;
-                self.parse_whitespace()
+                None
             },
             "\"" => self.parse_string_literal(),
             _ => if Self::is_digit(substring) {
@@ -100,13 +103,8 @@ impl<'a> Scanner<'a> {
         true
     }
 
-    fn parse_whitespace(&mut self) -> Result<TokenType<'a>, String> {
-        let substring = self.advance();
-        self.start += 1;
-        self.scan_token(substring)
-    }
 
-    fn parse_string_literal(&mut self) -> Result<TokenType<'a>, String> {
+    fn parse_string_literal(&mut self) -> Option<Result<TokenType<'a>, String>> {
         while self.peek() != "\"" && !self.is_at_end() {
             if self.peek() == "\n" {
                 self.line += 1;
@@ -115,16 +113,16 @@ impl<'a> Scanner<'a> {
         }
 
         if self.is_at_end() {
-            return Err("Unterminated string.".to_string());
+            return Some(Err("Unterminated string.".to_string()));
         }
 
         self.advance();
 
         let value = &self.source[self.start + 1..self.current - 1];
-        Ok(TokenType::String(value))
+        Some(Ok(TokenType::String(value)))
     }
 
-    fn parse_number_literal(&mut self) -> Result<TokenType<'a>, String> {
+    fn parse_number_literal(&mut self) -> Option<Result<TokenType<'a>, String>> {
         while Self::is_digit(self.peek()) {
             self.advance();
         }
@@ -139,44 +137,44 @@ impl<'a> Scanner<'a> {
 
         let number_string = &self.source[self.start..self.current];
         println!("{:?}", number_string);
-        match number_string.parse::<f64>() {
+        Some(match number_string.parse::<f64>() {
             Ok(number) => Ok(TokenType::Number(number)),
             Err(parsing_error) => Err(parsing_error.to_string())
-        }
+        })
     }
 
-    fn parse_identifier(&mut self) -> Result<TokenType<'a>, String> {
+    fn parse_identifier(&mut self) -> Option<Result<TokenType<'a>, String>> {
         while Self::is_alpha_numberic(self.peek()) {
             self.advance();
         }
 
         let substring = &self.source[self.start..self.current];
-        match TokenType::from_str(substring) {
+        Some(match TokenType::from_str(substring) {
             a@Ok(_) => a,
             Err(_) => Ok(TokenType::Identifier)
-        }
+        })
     }
 
-    fn parse_operator(&mut self, substring: &'a str) -> Result<TokenType<'a>, String> {
+    fn parse_operator(&mut self, substring: &'a str) -> Option<Result<TokenType<'a>, String>> {
         match TokenType::from_str(substring) {
-            b@Ok(TokenType::Bang) => if self.match_token("=") { Ok(TokenType::BangEqual) } else { b },
-            e@Ok(TokenType::Equal) => if self.match_token("=") { Ok(TokenType::EqualEqual) } else { e },
-            l@Ok(TokenType::Less) => if self.match_token("=") { Ok(TokenType::LessEqual) } else { l },
-            g@Ok(TokenType::Greater) => if self.match_token("=") { Ok(TokenType::GreaterEqual) } else { g }
+            b@Ok(TokenType::Bang) => if self.match_token("=") { Some(Ok(TokenType::BangEqual)) } else { Some(b) },
+            e@Ok(TokenType::Equal) => if self.match_token("=") { Some(Ok(TokenType::EqualEqual)) } else { Some(e) },
+            l@Ok(TokenType::Less) => if self.match_token("=") { Some(Ok(TokenType::LessEqual)) } else { Some(l) },
+            g@Ok(TokenType::Greater) => if self.match_token("=") { Some(Ok(TokenType::GreaterEqual)) } else { Some(g) }
             s@Ok(TokenType::Slash) => if self.match_token("/") {
                 while self.peek() != "\n" && !self.is_at_end() {
                     self.advance();
                 }
                 if self.is_at_end() {
-                    return Ok(TokenType::Eof);
+                    return None;
                 } else {
                     let substring = self.advance();
                     self.scan_token(substring)
                 }
             } else {
-                s
+                Some(s)
             },
-            other => other
+            other => Some(other)
         }
     }
 
@@ -246,7 +244,7 @@ mod tests {
             &TokenType::Less,
             &TokenType::LessEqual,
             &TokenType::Greater,
-            &TokenType::GreaterEqual,
+            &TokenType::GreaterEqual
         ];
         assert_eq!(expected, token_types);
     }
@@ -260,7 +258,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         println!("Tokens: {:?}", token_types);
-        assert_eq!(vec![&TokenType::Eof], token_types);
+        assert!(token_types.is_empty());
     }
 
     #[test]
@@ -277,8 +275,7 @@ mod tests {
             &TokenType::RightParen,
             &TokenType::RightParen,
             &TokenType::LeftBrace,
-            &TokenType::RightBrace,
-            &TokenType::Eof
+            &TokenType::RightBrace
         ];
 
         assert_eq!(expected, token_types);
