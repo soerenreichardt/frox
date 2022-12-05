@@ -58,8 +58,10 @@ impl<'a> Scanner<'a> {
                 self.scan_token(substring)
             },
             "\"" => self.parse_string_literal(),
-            _ => if self.is_digit(substring) {
+            _ => if Self::is_digit(substring) {
                 self.parse_number_literal()
+            } else if Self::is_letter(substring) {
+                self.parse_identifier()
             } else {
                 match TokenType::from_str(substring) {
                     b@Ok(TokenType::Bang) => if self.match_token("=") { Ok(TokenType::BangEqual) } else { b },
@@ -140,14 +142,14 @@ impl<'a> Scanner<'a> {
     }
 
     fn parse_number_literal(&mut self) -> Result<TokenType<'a>, String> {
-        while self.is_digit(self.peek()) {
+        while Self::is_digit(self.peek()) {
             self.advance();
         }
 
-        if self.peek() == "." && self.is_digit(self.peek_next()) {
+        if self.peek() == "." && Self::is_digit(self.peek_next()) {
             self.advance();
 
-            while self.is_digit(self.peek()) {
+            while Self::is_digit(self.peek()) {
                 self.advance();
             }
         }
@@ -160,8 +162,29 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn is_digit(&self, substring: &'a str) -> bool {
+    fn parse_identifier(&mut self) -> Result<TokenType<'a>, String> {
+        while Self::is_alpha_numberic(self.peek()) {
+            self.advance();
+        }
+
+        let substring = &self.source[self.start..self.current];
+        match TokenType::from_str(substring) {
+            a@Ok(_) => a,
+            Err(_) => Ok(TokenType::Identifier)
+        }
+    }
+
+    fn is_digit(substring: &'a str) -> bool {
         substring.parse::<f64>().is_ok()
+    }
+
+    fn is_letter(substring: &'a str) -> bool {
+        let c = substring.chars().next().unwrap();
+        c.is_alphabetic() || c == '_'
+    }
+
+    fn is_alpha_numberic(substring: &'a str) -> bool {
+        Scanner::is_digit(substring) || Scanner::is_letter(substring)
     }
 }
 
@@ -270,6 +293,25 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(vec![&TokenType::Number(13.37), &TokenType::Number(1337.0)], token_types);
+    }
+
+    #[test]
+    fn should_parse_identifiers_and_keywords() {
+        let mut scanner = Scanner::new("and class while foo");
+        let tokens = scanner.scan_tokens().unwrap();
+        let token_types = tokens.iter()
+            .map(|token| &token.token_type)
+            .collect::<Vec<_>>();
+
+        let expected = vec![
+            &TokenType::And,
+            &TokenType::Class,
+            &TokenType::While,
+            &TokenType::Identifier
+        ];
+
+        assert_eq!(expected, token_types);
+        assert_eq!("foo", tokens.get(3).unwrap().lexeme)
     }
 
     #[test]

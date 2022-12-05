@@ -59,7 +59,7 @@ pub enum Literal<'a> {
 #[derive(Debug, PartialEq)]
 pub struct Token<'a> {
     pub token_type: TokenType<'a>,
-    lexeme: &'a str,
+    pub lexeme: &'a str,
     line: usize
 }
 
@@ -83,6 +83,23 @@ impl<'a> FromStr for TokenType<'a> {
             "=" => Ok(TokenType::Equal),
             "<" => Ok(TokenType::Less),
             ">" => Ok(TokenType::Greater),
+            // keywords
+            "and" => Ok(TokenType::And),
+            "class" => Ok(TokenType::Class),
+            "else" => Ok(TokenType::Else),
+            "false" => Ok(TokenType::False),
+            "for" => Ok(TokenType::For),
+            "fun" => Ok(TokenType::Fun),
+            "if" => Ok(TokenType::If),
+            "nil" => Ok(TokenType::Nil),
+            "or" => Ok(TokenType::Or),
+            "print" => Ok(TokenType::Print),
+            "return" => Ok(TokenType::Return),
+            "super" => Ok(TokenType::Super),
+            "this" => Ok(TokenType::This),
+            "true" => Ok(TokenType::True),
+            "var" => Ok(TokenType::Var),
+            "while" => Ok(TokenType::While),
             _ => Err(format!("Unexpected character: `{s}`").to_string())
         }
     }
