@@ -1,6 +1,6 @@
-use std::str::FromStr;
+use std::{str::FromStr, fmt::Display};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
     // Single-character tokens
     LeftParen, 
@@ -49,6 +49,11 @@ pub enum TokenType {
     While,
 
     Eof
+}
+
+pub enum LiteralValue {
+    String(String),
+    Number(f64)
 }
 
 #[derive(Debug, PartialEq)]
@@ -106,6 +111,15 @@ impl<'a> Token<'a> {
             token_type,
             lexeme,
             line
+        }
+    }
+}
+
+impl Display for LiteralValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LiteralValue::String(string) => f.write_str(string),
+            LiteralValue::Number(number) => f.write_str(number.to_string().as_str())
         }
     }
 }

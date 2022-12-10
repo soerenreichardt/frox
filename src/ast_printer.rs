@@ -1,4 +1,4 @@
-use crate::expression::Expression;
+use crate::{expression::Expression};
 
 #[allow(dead_code)]
 struct AstPrinter {
@@ -6,20 +6,19 @@ struct AstPrinter {
 
 impl AstPrinter {
     #[allow(dead_code)]
-    fn evaluate<'a>(expression: &Expression<'a>) -> String {
+    fn evaluate(expression: &Expression) -> String {
         match expression {
-            Expression::Binary(left, right, token) => 
-                AstPrinter::parenthesize(token.lexeme, &[left, right]),
+            Expression::Binary(left, right, token_type) => 
+                AstPrinter::parenthesize(token_type.to_string().as_str(), &[left, right]),
             Expression::Grouping(expression) => 
                 AstPrinter::parenthesize("group", &[expression]),
-            Expression::Literal(token) => 
-                token.lexeme.to_string(),
-            Expression::Unary(token, expression) =>
-                AstPrinter::parenthesize(token.lexeme, &[expression])
+            Expression::Literal(literal_value) => literal_value.to_string(),
+            Expression::Unary(token_type, expression) =>
+                AstPrinter::parenthesize(token_type.to_string().as_str(), &[expression])
         }
     }
 
-    fn parenthesize<'a>(name: &str, expressions: &[&Expression<'a>]) -> String {
+    fn parenthesize(name: &str, expressions: &[&Expression]) -> String {
         let mut strings: Vec<String> = Vec::new();
 
         strings.push("(".to_string());
@@ -35,7 +34,7 @@ impl AstPrinter {
 
 #[cfg(test)]
 mod tests {
-    use crate::token::{Token, TokenType};
+    use crate::{token::{LiteralValue}, expression::{BinaryOperator, UnaryOperator}};
 
     use super::*;
 
@@ -43,13 +42,13 @@ mod tests {
     fn should_print_expression_tree() {
         let expression = Box::new(Expression::Binary(
             Box::new(Expression::Unary(
-                Token::new(TokenType::Minus, "-", 1), 
-                Box::new(Expression::Literal(Token::new(TokenType::Number, "123", 1)))
+                UnaryOperator::Minus, 
+                Box::new(Expression::Literal(LiteralValue::String("123".to_string())))
             )), 
             Box::new(Expression::Grouping(
-                Box::new(Expression::Literal(Token::new(TokenType::Number, "45.67", 1)))
+                Box::new(Expression::Literal(LiteralValue::Number(45.67)))
             )), 
-            Token::new(TokenType::Star, "*", 1)
+            BinaryOperator::Star
         ));
 
         assert_eq!("(* (- 123) (group 45.67))", AstPrinter::evaluate(&expression))
