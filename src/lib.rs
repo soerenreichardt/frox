@@ -1,6 +1,7 @@
 pub mod scanner;
 pub mod token;
 pub mod expression;
+pub mod parser;
 mod ast_printer;
 
 use crate::scanner::*;

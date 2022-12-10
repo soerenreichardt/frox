@@ -51,11 +51,6 @@ pub enum TokenType {
     Eof
 }
 
-pub enum LiteralValue {
-    String(String),
-    Number(f64)
-}
-
 #[derive(Debug, PartialEq)]
 pub struct Token<'a> {
     pub token_type: TokenType,
@@ -111,15 +106,6 @@ impl<'a> Token<'a> {
             token_type,
             lexeme,
             line
-        }
-    }
-}
-
-impl Display for LiteralValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LiteralValue::String(string) => f.write_str(string),
-            LiteralValue::Number(number) => f.write_str(number.to_string().as_str())
         }
     }
 }

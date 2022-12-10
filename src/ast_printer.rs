@@ -34,7 +34,7 @@ impl AstPrinter {
 
 #[cfg(test)]
 mod tests {
-    use crate::{token::{LiteralValue}, expression::{BinaryOperator, UnaryOperator}};
+    use crate::{expression::{BinaryOperator, UnaryOperator, LiteralValue}};
 
     use super::*;
 
@@ -48,7 +48,7 @@ mod tests {
             Box::new(Expression::Grouping(
                 Box::new(Expression::Literal(LiteralValue::Number(45.67)))
             )), 
-            BinaryOperator::Star
+            BinaryOperator::Multiply
         ));
 
         assert_eq!("(* (- 123) (group 45.67))", AstPrinter::evaluate(&expression))

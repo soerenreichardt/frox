@@ -135,7 +135,6 @@ impl<'a> Scanner<'a> {
         }
 
         let number_string = &self.source[self.start..self.current];
-        println!("{:?}", number_string);
         Some(match number_string.parse::<f64>() {
             Ok(_) => Ok(TokenType::Number),
             Err(parsing_error) => Err(parsing_error.to_string())
