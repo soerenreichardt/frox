@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq)]
-pub enum TokenType<'a> {
+pub enum TokenType {
     // Single-character tokens
     LeftParen, 
     RightParen,
@@ -27,8 +27,8 @@ pub enum TokenType<'a> {
 
     //Literals
     Identifier,
-    String(&'a str),
-    Number(f64),
+    String,
+    Number,
 
     //Keywords
     And,
@@ -51,19 +51,14 @@ pub enum TokenType<'a> {
     Eof
 }
 
-#[derive(Debug)]
-pub enum Literal<'a> {
-    String(&'a str)
-}
-
 #[derive(Debug, PartialEq)]
 pub struct Token<'a> {
-    pub token_type: TokenType<'a>,
+    pub token_type: TokenType,
     pub lexeme: &'a str,
     line: usize
 }
 
-impl<'a> FromStr for TokenType<'a> {
+impl FromStr for TokenType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -106,7 +101,7 @@ impl<'a> FromStr for TokenType<'a> {
 }
 
 impl<'a> Token<'a> {
-    pub fn new(token_type: TokenType<'a>, lexeme: &'a str, line: usize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: &'a str, line: usize) -> Self {
         Token {
             token_type,
             lexeme,

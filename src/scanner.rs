@@ -47,7 +47,7 @@ impl<'a> Scanner<'a> {
         self.current >= self.source.len()
     }
 
-    fn scan_token(&mut self, substring: &'a str) -> Option<Result<TokenType<'a>, String>> {
+    fn scan_token(&mut self, substring: &'a str) -> Option<Result<TokenType, String>> {
         match substring {
             " " | "\r" | "\t" => {
                 None
@@ -86,7 +86,7 @@ impl<'a> Scanner<'a> {
         self.source.get(self.current+1..self.current+2).unwrap()
     }
 
-    fn add_token(&self, token_type: TokenType<'a>, tokens: &mut Vec<Token<'a>>) {
+    fn add_token(&self, token_type: TokenType, tokens: &mut Vec<Token<'a>>) {
         let substring = &self.source[self.start..self.current];
         tokens.push(Token::new(token_type, substring, self.line))
     }
@@ -104,7 +104,7 @@ impl<'a> Scanner<'a> {
     }
 
 
-    fn parse_string_literal(&mut self) -> Option<Result<TokenType<'a>, String>> {
+    fn parse_string_literal(&mut self) -> Option<Result<TokenType, String>> {
         while self.peek() != "\"" && !self.is_at_end() {
             if self.peek() == "\n" {
                 self.line += 1;
@@ -118,11 +118,10 @@ impl<'a> Scanner<'a> {
 
         self.advance();
 
-        let value = &self.source[self.start + 1..self.current - 1];
-        Some(Ok(TokenType::String(value)))
+        Some(Ok(TokenType::String))
     }
 
-    fn parse_number_literal(&mut self) -> Option<Result<TokenType<'a>, String>> {
+    fn parse_number_literal(&mut self) -> Option<Result<TokenType, String>> {
         while Self::is_digit(self.peek()) {
             self.advance();
         }
@@ -138,12 +137,12 @@ impl<'a> Scanner<'a> {
         let number_string = &self.source[self.start..self.current];
         println!("{:?}", number_string);
         Some(match number_string.parse::<f64>() {
-            Ok(number) => Ok(TokenType::Number(number)),
+            Ok(_) => Ok(TokenType::Number),
             Err(parsing_error) => Err(parsing_error.to_string())
         })
     }
 
-    fn parse_identifier(&mut self) -> Option<Result<TokenType<'a>, String>> {
+    fn parse_identifier(&mut self) -> Option<Result<TokenType, String>> {
         while Self::is_alpha_numberic(self.peek()) {
             self.advance();
         }
@@ -155,7 +154,7 @@ impl<'a> Scanner<'a> {
         })
     }
 
-    fn parse_operator(&mut self, substring: &'a str) -> Option<Result<TokenType<'a>, String>> {
+    fn parse_operator(&mut self, substring: &'a str) -> Option<Result<TokenType, String>> {
         match TokenType::from_str(substring) {
             b@Ok(TokenType::Bang) => if self.match_token("=") { Some(Ok(TokenType::BangEqual)) } else { Some(b) },
             e@Ok(TokenType::Equal) => if self.match_token("=") { Some(Ok(TokenType::EqualEqual)) } else { Some(e) },
@@ -302,22 +301,16 @@ mod tests {
     fn should_parse_string_literals() {
         let mut scanner = Scanner::new("\"literally a string\"");
         let tokens = scanner.scan_tokens().unwrap();
-        let token_types = tokens.iter()
-            .map(|token| &token.token_type)
-            .collect::<Vec<_>>();
 
-        assert_eq!(vec![&TokenType::String("literally a string")], token_types);
+        assert_eq!(vec![Token::new(TokenType::String, "\"literally a string\"", 1)], tokens);
     }
 
     #[test]
     fn should_parse_number_literals() {
         let mut scanner = Scanner::new("13.37\n1337");
         let tokens = scanner.scan_tokens().unwrap();
-        let token_types = tokens.iter()
-            .map(|token| &token.token_type)
-            .collect::<Vec<_>>();
 
-        assert_eq!(vec![&TokenType::Number(13.37), &TokenType::Number(1337.0)], token_types);
+        assert_eq!(vec![Token::new(TokenType::Number, "13.37", 1), Token::new(TokenType::Number, "1337", 2)], tokens);
     }
 
     #[test]
@@ -347,7 +340,7 @@ mod tests {
         let expected = vec![
             Token::new(TokenType::LeftBrace, "{", 1),
             Token::new(TokenType::LessEqual, "<=", 1),
-            Token::new(TokenType::String("foo\nbar"), "\"foo\nbar\"", 2)
+            Token::new(TokenType::String, "\"foo\nbar\"", 2)
         ];
 
         assert_eq!(expected, tokens);

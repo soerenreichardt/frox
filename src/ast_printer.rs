@@ -1,10 +1,11 @@
 use crate::expression::Expression;
-use crate::token::*;
 
+#[allow(dead_code)]
 struct AstPrinter {
 }
 
 impl AstPrinter {
+    #[allow(dead_code)]
     fn evaluate<'a>(expression: &Expression<'a>) -> String {
         match expression {
             Expression::Binary(left, right, token) => 
@@ -34,6 +35,8 @@ impl AstPrinter {
 
 #[cfg(test)]
 mod tests {
+    use crate::token::{Token, TokenType};
+
     use super::*;
 
     #[test]
@@ -41,10 +44,10 @@ mod tests {
         let expression = Box::new(Expression::Binary(
             Box::new(Expression::Unary(
                 Token::new(TokenType::Minus, "-", 1), 
-                Box::new(Expression::Literal(Token::new(TokenType::Number(123.0), "123", 1)))
+                Box::new(Expression::Literal(Token::new(TokenType::Number, "123", 1)))
             )), 
             Box::new(Expression::Grouping(
-                Box::new(Expression::Literal(Token::new(TokenType::Number(45.67), "45.67", 1)))
+                Box::new(Expression::Literal(Token::new(TokenType::Number, "45.67", 1)))
             )), 
             Token::new(TokenType::Star, "*", 1)
         ));
