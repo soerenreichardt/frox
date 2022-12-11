@@ -39,19 +39,15 @@ impl<'a> Parser<'a> {
     fn equality(&mut self) -> Expression {
         let mut expression = self.comparison();
         loop {
-            if let Some(token) = self.token_iterator.peek() {
-                let operator = match token.token_type {
-                    TokenType::BangEqual => BinaryOperator::CompareNot,
-                    TokenType::EqualEqual => BinaryOperator::Compare,
-                    _ => break
-                };
-
-                self.token_iterator.next();
-                let right = self.comparison();
-                expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
-            } else {
-                break
-            }
+            let token_type = self.token_iterator.peek().map(|token| token.token_type);
+            let operator = match token_type {
+                Some(TokenType::BangEqual) => BinaryOperator::CompareNot,
+                Some(TokenType::EqualEqual) => BinaryOperator::Compare,
+                _ => break
+            };
+            self.token_iterator.next();
+            let right = self.comparison();
+            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
         }
         expression
     }
@@ -59,21 +55,18 @@ impl<'a> Parser<'a> {
     fn comparison(&mut self) -> Expression {
         let mut expression = self.term();
         loop {
-            if let Some(token) = self.token_iterator.peek() {
-                let operator = match token.token_type {
-                    TokenType::Greater => BinaryOperator::GreaterThan,
-                    TokenType::GreaterEqual => BinaryOperator::GreaterThenOrEqual,
-                    TokenType::Less => BinaryOperator::LessThan,
-                    TokenType::LessEqual => BinaryOperator::LessThanOrEqual,
-                    _ => break
-                };
+            let token_type = self.token_iterator.peek().map(|token| token.token_type);
+            let operator = match token_type {
+                Some(TokenType::Greater) => BinaryOperator::GreaterThan,
+                Some(TokenType::GreaterEqual) => BinaryOperator::GreaterThenOrEqual,
+                Some(TokenType::Less) => BinaryOperator::LessThan,
+                Some(TokenType::LessEqual) => BinaryOperator::LessThanOrEqual,
+                _ => break
+            };
 
-                self.token_iterator.next();
-                let right = self.term();
-                expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
-            } else {
-                break
-            }
+            self.token_iterator.next();
+            let right = self.term();
+            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
         }
         expression
     }
@@ -82,19 +75,16 @@ impl<'a> Parser<'a> {
         let mut expression = self.factor();
 
         loop {
-            if let Some(token) = self.token_iterator.peek() {
-                let operator = match token.token_type {
-                    TokenType::Plus => BinaryOperator::Add,
-                    TokenType::Minus => BinaryOperator::Subtract,
-                    _ => break
-                };
+            let token_type = self.token_iterator.peek().map(|token| token.token_type);
+            let operator = match token_type {
+                Some(TokenType::Plus) => BinaryOperator::Add,
+                Some(TokenType::Minus) => BinaryOperator::Subtract,
+                _ => break
+            };
 
-                self.token_iterator.next();
-                let right = self.factor();
-                expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
-            } else {
-                break
-            }
+            self.token_iterator.next();
+            let right = self.factor();
+            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
         }
         expression
     }
@@ -103,58 +93,50 @@ impl<'a> Parser<'a> {
         let mut expression = self.unary();
 
         loop {
-            if let Some(token) = self.token_iterator.peek() {
-                let operator = match token.token_type {
-                    TokenType::Star => BinaryOperator::Multiply,
-                    TokenType::Slash => BinaryOperator::Divide,
-                    _ => break
-                };
+            let token_type = self.token_iterator.peek().map(|token| token.token_type);
+            let operator = match token_type {
+                Some(TokenType::Star) => BinaryOperator::Multiply,
+                Some(TokenType::Slash) => BinaryOperator::Divide,
+                _ => break
+            };
 
-                self.token_iterator.next();
-                let right = self.unary();
-                expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
-            } else {
-                break
-            }
+            self.token_iterator.next();
+            let right = self.unary();
+            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
         }
         expression
     }
 
     fn unary(&mut self) -> Expression {
-        if let Some(token) = self.token_iterator.peek() {
-            let operator = match token.token_type {
-                TokenType::Bang => UnaryOperator::Not,
-                TokenType::Minus => UnaryOperator::Minus,
-                _ => return self.primary()
-            };
+        let token_type = self.token_iterator.peek().map(|token| token.token_type);
+        let operator = match token_type {
+            Some(TokenType::Bang) => UnaryOperator::Not,
+            Some(TokenType::Minus) => UnaryOperator::Minus,
+            _ => return self.primary()
+        };
 
-            self.token_iterator.next();
-            let right = self.unary();
-            return Expression::Unary(operator, Box::new(right));
-        }
-        self.primary()
+        self.token_iterator.next();
+        let right = self.unary();
+        return Expression::Unary(operator, Box::new(right));
     }
 
     fn primary(&mut self) -> Expression {
-        if let Some(token) = self.token_iterator.peek() {
-            let expression = match token.token_type {
-                TokenType::False => Some(Expression::Literal(LiteralValue::Boolean(false))),
-                TokenType::True => Some(Expression::Literal(LiteralValue::Boolean(true))),
-                TokenType::Nil => Some(Expression::Literal(LiteralValue::Nil)),
-                TokenType::Number => Some(Expression::Literal(LiteralValue::Number(token.lexeme.parse::<f64>().unwrap()))),
-                TokenType::String => Some(Expression::Literal(LiteralValue::String(token.lexeme.to_string()))),
-                _ => None
-            };
+        let expression = self.token_iterator.peek().map(|token| match token {
+            Token { token_type: TokenType::False, .. } => Expression::Literal(LiteralValue::Boolean(false)),
+            Token { token_type: TokenType::True, .. } => Expression::Literal(LiteralValue::Boolean(true)),
+            Token { token_type: TokenType::Nil, .. } => Expression::Literal(LiteralValue::Nil),
+            Token { token_type: TokenType::Number, lexeme, .. } => Expression::Literal(LiteralValue::Number(lexeme.parse::<f64>().unwrap())),
+            Token { token_type: TokenType::String, lexeme, .. } => Expression::Literal(LiteralValue::String(lexeme.to_string())),
+            _ => panic!()
+        });
 
-            match expression {
-                Some(expression) => {
-                    self.token_iterator.next();
-                    return expression;
-                },
-                None => panic!()
-            }
+        match expression {
+            Some(expression) => {
+                self.token_iterator.next();
+                return expression;
+            },
+            None => panic!()
         }
-        panic!()
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{str::FromStr, fmt::Display};
+use std::{str::FromStr};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
