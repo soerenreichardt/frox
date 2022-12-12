@@ -1,27 +1,30 @@
 use std::{str::FromStr};
 
+use crate::context::Context;
 use crate::token::*;
+use crate::error::*;
 
 pub struct Scanner<'a> {
     source: &'a str,
+    context: Context,
     start: usize,
     current: usize,
     line: usize
 }
 
 impl<'a> Scanner<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(source: &'a str, context: Context) -> Self {
         Scanner {
             source,
+            context,
             start: 0,
             current: 0,
             line: 1
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Result<Vec<Token<'a>>, String> {
+    pub fn scan_tokens(&mut self) -> Result<Vec<Token<'a>>> {
         let mut tokens = Vec::new();
-        let mut errors = Vec::new();
 
         while !self.is_at_end() {
             self.start = self.current;
@@ -31,23 +34,23 @@ impl<'a> Scanner<'a> {
             match token_type {
                 Some(token_type) => match token_type {
                     Ok(token_type) =>  self.add_token(token_type, &mut tokens),
-                    Err(message) => errors.push(self.format_error(message))
+                    Err(error) => self.context.error_collector.collect_and_format(error, self.source, self.line, self.current)
                 },
                 None => continue
             }
         }
 
-        if errors.len() > 0 {
-            return Err(errors.join(" "));
+        match self.context.error_collector.flush_errors() {
+            Some(message) => Err(Error::ScannerError(message)),
+            None => Ok(tokens)
         }
-        Ok(tokens)
     }
 
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
 
-    fn scan_token(&mut self, substring: &'a str) -> Option<Result<TokenType, String>> {
+    fn scan_token(&mut self, substring: &'a str) -> Option<Result<TokenType>> {
         match substring {
             " " | "\r" | "\t" => {
                 None
@@ -104,7 +107,7 @@ impl<'a> Scanner<'a> {
     }
 
 
-    fn parse_string_literal(&mut self) -> Option<Result<TokenType, String>> {
+    fn parse_string_literal(&mut self) -> Option<Result<TokenType>> {
         while self.peek() != "\"" && !self.is_at_end() {
             if self.peek() == "\n" {
                 self.line += 1;
@@ -113,7 +116,7 @@ impl<'a> Scanner<'a> {
         }
 
         if self.is_at_end() {
-            return Some(Err("Unterminated string.".to_string()));
+            return Some(Err(Error::ScannerError("Unterminated string.".to_string())));
         }
 
         self.advance();
@@ -121,7 +124,7 @@ impl<'a> Scanner<'a> {
         Some(Ok(TokenType::String))
     }
 
-    fn parse_number_literal(&mut self) -> Option<Result<TokenType, String>> {
+    fn parse_number_literal(&mut self) -> Option<Result<TokenType>> {
         while Self::is_digit(self.peek()) {
             self.advance();
         }
@@ -137,11 +140,11 @@ impl<'a> Scanner<'a> {
         let number_string = &self.source[self.start..self.current];
         Some(match number_string.parse::<f64>() {
             Ok(_) => Ok(TokenType::Number),
-            Err(parsing_error) => Err(parsing_error.to_string())
+            Err(parsing_error) => Err(Error::ScannerError(parsing_error.to_string()))
         })
     }
 
-    fn parse_identifier(&mut self) -> Option<Result<TokenType, String>> {
+    fn parse_identifier(&mut self) -> Option<Result<TokenType>> {
         while Self::is_alpha_numberic(self.peek()) {
             self.advance();
         }
@@ -153,7 +156,7 @@ impl<'a> Scanner<'a> {
         })
     }
 
-    fn parse_operator(&mut self, substring: &'a str) -> Option<Result<TokenType, String>> {
+    fn parse_operator(&mut self, substring: &'a str) -> Option<Result<TokenType>> {
         match TokenType::from_str(substring) {
             b@Ok(TokenType::Bang) => if self.match_token("=") { Some(Ok(TokenType::BangEqual)) } else { Some(b) },
             e@Ok(TokenType::Equal) => if self.match_token("=") { Some(Ok(TokenType::EqualEqual)) } else { Some(e) },
@@ -218,7 +221,7 @@ mod tests {
 
     #[test]
     fn should_parse_token_types() {
-        let mut scanner = Scanner::new("{}(),.-+;*/!!===<<=>>=");
+        let mut scanner = Scanner::new("{}(),.-+;*/!!===<<=>>=", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
         let token_types = tokens.iter()
             .map(|token| &token.token_type)
@@ -249,7 +252,7 @@ mod tests {
 
     #[test]
     fn should_parse_comment() {
-        let mut scanner = Scanner::new("//some comment");
+        let mut scanner = Scanner::new("//some comment", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
         let token_types = tokens.iter()
             .map(|token| &token.token_type)
@@ -261,7 +264,7 @@ mod tests {
 
     #[test]
     fn should_ignore_whitespace_with_comment() {
-        let mut scanner = Scanner::new("(( )){} // grouping stuff");
+        let mut scanner = Scanner::new("(( )){} // grouping stuff", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
         let token_types = tokens.iter()
             .map(|token| &token.token_type)
@@ -283,7 +286,7 @@ mod tests {
     fn should_increment_counter_on_line_break() {
         let mut scanner = Scanner::new("(
             // comment, but still count the newline
-        )");
+        )", Context::new());
 
         assert_eq!(1, scanner.line);
 
@@ -298,7 +301,7 @@ mod tests {
 
     #[test]
     fn should_parse_string_literals() {
-        let mut scanner = Scanner::new("\"literally a string\"");
+        let mut scanner = Scanner::new("\"literally a string\"", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
 
         assert_eq!(vec![Token::new(TokenType::String, "\"literally a string\"", 1)], tokens);
@@ -306,7 +309,7 @@ mod tests {
 
     #[test]
     fn should_parse_number_literals() {
-        let mut scanner = Scanner::new("13.37\n1337");
+        let mut scanner = Scanner::new("13.37\n1337", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
 
         assert_eq!(vec![Token::new(TokenType::Number, "13.37", 1), Token::new(TokenType::Number, "1337", 2)], tokens);
@@ -314,7 +317,7 @@ mod tests {
 
     #[test]
     fn should_parse_identifiers_and_keywords() {
-        let mut scanner = Scanner::new("and class while foo");
+        let mut scanner = Scanner::new("and class while foo", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
         let token_types = tokens.iter()
             .map(|token| &token.token_type)
@@ -333,7 +336,7 @@ mod tests {
 
     #[test]
     fn should_store_correct_lexemes_and_lines() {
-        let mut scanner = Scanner::new("{<=\"foo\nbar\"");
+        let mut scanner = Scanner::new("{<=\"foo\nbar\"", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
 
         let expected = vec![
@@ -347,9 +350,9 @@ mod tests {
 
     #[test]
     fn should_return_err_on_unknown_character() {
-        let mut scanner = Scanner::new("{}[");
+        let mut scanner = Scanner::new("{}[", Context::new());
         let tokens = scanner.scan_tokens();
-        let expected = format!("Error occured on line 1:\n{{}}[\n  ^\n  Unexpected character: `[`").to_string();
+        let expected = Error::ScannerError(format!("Error occured on line 1:\n{{}}[\n  ^\n  Unexpected character: `[`").to_string());
 
         assert_eq!(tokens.is_err(), true);
         assert_eq!(expected, tokens.err().unwrap());

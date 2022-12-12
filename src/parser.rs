@@ -142,13 +142,13 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::scanner::Scanner;
+    use crate::{scanner::Scanner, context::Context};
 
     use super::*;
 
     #[test]
     fn foo() {
-        let mut scanner = Scanner::new("1 == 2");
+        let mut scanner = Scanner::new("1 == 2", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
         let mut parser = Parser::new(tokens);
         let expression = parser.expression();

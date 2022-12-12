@@ -1,5 +1,7 @@
 use std::{str::FromStr};
 
+use crate::error::{Error};
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
     // Single-character tokens
@@ -59,7 +61,7 @@ pub struct Token<'a> {
 }
 
 impl FromStr for TokenType {
-    type Err = String;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -95,7 +97,7 @@ impl FromStr for TokenType {
             "true" => Ok(TokenType::True),
             "var" => Ok(TokenType::Var),
             "while" => Ok(TokenType::While),
-            _ => Err(format!("Unexpected character: `{s}`").to_string())
+            _ => Err(Error::ScannerError(format!("Unexpected character: `{s}`").to_string()))
         }
     }
 }
