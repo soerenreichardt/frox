@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::token::Token;
+
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq)]
@@ -42,6 +44,10 @@ impl ErrorCollector {
     pub fn collect_and_format(&mut self, error: Error, source: &str, line: usize, position: usize) {
         let message = error.format_error(source, line, position);
         self.errors.push(message)
+    }
+
+    pub fn collect(&mut self, error: Error) {
+        self.errors.push(error.to_string())
     }
 
     pub fn flush_errors(&mut self) -> Option<String> {

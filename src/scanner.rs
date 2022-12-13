@@ -46,6 +46,10 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    pub fn context(&mut self) -> Context {
+        std::mem::replace(&mut self.context, Context::new())
+    }
+
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }

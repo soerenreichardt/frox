@@ -1,12 +1,15 @@
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
+use crate::context::Context;
 use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue};
 use crate::{expression::Expression};
 use crate::token::*;
+use crate::error::*;
 
-struct Parser<'a> {
-    token_iterator: Peekable<TokenIterator<'a>>
+pub struct Parser<'a> {
+    token_iterator: Peekable<TokenIterator<'a>>,
+    context: Context
 }
 
 struct TokenIterator<'a> {
@@ -22,22 +25,27 @@ impl<'a> Iterator for TokenIterator<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn new(tokens: Vec<Token<'a>>) -> Self {
+    pub fn new(tokens: Vec<Token<'a>>, context: Context) -> Self {
         let token_holder = TokenIterator {
             tokens: tokens.into_iter()
         };
 
         Parser {
-            token_iterator: token_holder.peekable()
+            token_iterator: token_holder.peekable(),
+            context
         }
     }
 
-    fn expression(&mut self) -> Expression {
+    pub fn expression(&mut self) -> Result<Expression> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Expression {
-        let mut expression = self.comparison();
+    fn equality(&mut self) -> Result<Expression> {
+        let mut expression = match self.comparison() {
+            Ok(comparison) => comparison,
+            e@Err(_) => return e
+        };
+
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
             let operator = match token_type {
@@ -46,14 +54,20 @@ impl<'a> Parser<'a> {
                 _ => break
             };
             self.token_iterator.next();
-            let right = self.comparison();
-            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
+            match self.comparison() {
+                Ok(right) => expression = Expression::Binary(Box::new(expression), Box::new(right), operator),
+                e@Err(_) => return e
+            }
         }
-        expression
+        Ok(expression)
     }
 
-    fn comparison(&mut self) -> Expression {
-        let mut expression = self.term();
+    fn comparison(&mut self) -> Result<Expression> {
+        let mut expression = match self.term() {
+            Ok(term) => term,
+            e@Err(_) => return e
+        };
+
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
             let operator = match token_type {
@@ -65,14 +79,19 @@ impl<'a> Parser<'a> {
             };
 
             self.token_iterator.next();
-            let right = self.term();
-            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
+            match self.term() {
+                Ok(right) => expression = Expression::Binary(Box::new(expression), Box::new(right), operator),
+                e@Err(_) => return e
+            }
         }
-        expression
+        Ok(expression)
     }
 
-    fn term(&mut self) -> Expression {
-        let mut expression = self.factor();
+    fn term(&mut self) -> Result<Expression> {
+        let mut expression = match self.factor() {
+            Ok(factor) => factor,
+            Err(error) => return Err(error)
+        };
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -83,14 +102,19 @@ impl<'a> Parser<'a> {
             };
 
             self.token_iterator.next();
-            let right = self.factor();
-            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
+            match self.factor() {
+                Ok(right) => expression = Expression::Binary(Box::new(expression), Box::new(right), operator),
+                e@Err(_) => return e
+            }
         }
-        expression
+        Ok(expression)
     }
 
-    fn factor(&mut self) -> Expression {
-        let mut expression = self.unary();
+    fn factor(&mut self) -> Result<Expression> {
+        let mut expression = match self.unary() {
+            Ok(unary) => unary,
+            Err(error) => return Err(error)
+        };
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -101,13 +125,15 @@ impl<'a> Parser<'a> {
             };
 
             self.token_iterator.next();
-            let right = self.unary();
-            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
+            match self.unary() {
+                Ok(right) => expression = Expression::Binary(Box::new(expression), Box::new(right), operator),
+                e@Err(_) => return e
+            }
         }
-        expression
+        Ok(expression)
     }
 
-    fn unary(&mut self) -> Expression {
+    fn unary(&mut self) -> Result<Expression> {
         let token_type = self.token_iterator.peek().map(|token| token.token_type);
         let operator = match token_type {
             Some(TokenType::Bang) => UnaryOperator::Not,
@@ -116,26 +142,28 @@ impl<'a> Parser<'a> {
         };
 
         self.token_iterator.next();
-        let right = self.unary();
-        return Expression::Unary(operator, Box::new(right));
+        self.unary().map(|right| Expression::Unary(operator, Box::new(right)))
     }
 
-    fn primary(&mut self) -> Expression {
-        let expression = self.token_iterator.peek().map(|token| match token {
-            Token { token_type: TokenType::False, .. } => Expression::Literal(LiteralValue::Boolean(false)),
-            Token { token_type: TokenType::True, .. } => Expression::Literal(LiteralValue::Boolean(true)),
-            Token { token_type: TokenType::Nil, .. } => Expression::Literal(LiteralValue::Nil),
-            Token { token_type: TokenType::Number, lexeme, .. } => Expression::Literal(LiteralValue::Number(lexeme.parse::<f64>().unwrap())),
-            Token { token_type: TokenType::String, lexeme, .. } => Expression::Literal(LiteralValue::String(lexeme.to_string())),
-            _ => panic!()
-        });
-
+    fn primary(&mut self) -> Result<Expression> {
+        let expression = match self.token_iterator.peek() {
+            Some(token) => match token {
+                Token { token_type: TokenType::False, .. } => Some(Expression::Literal(LiteralValue::Boolean(false))),
+                Token { token_type: TokenType::True, .. } => Some(Expression::Literal(LiteralValue::Boolean(true))),
+                Token { token_type: TokenType::Nil, .. } => Some(Expression::Literal(LiteralValue::Nil)),
+                Token { token_type: TokenType::Number, lexeme, .. } => Some(Expression::Literal(LiteralValue::Number(lexeme.parse::<f64>().unwrap()))),
+                Token { token_type: TokenType::String, lexeme, .. } => Some(Expression::Literal(LiteralValue::String(lexeme.to_string()))),
+                _ => None
+            },
+            None => None
+        };
+        
         match expression {
             Some(expression) => {
                 self.token_iterator.next();
-                return expression;
+                return Ok(expression);
             },
-            None => panic!()
+            None => Err(Error::ParserError("Could not match expression".to_string()))
         }
     }
 }
@@ -147,11 +175,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn foo() {
+    fn should_parse_expression() {
         let mut scanner = Scanner::new("1 == 2", Context::new());
         let tokens = scanner.scan_tokens().unwrap();
-        let mut parser = Parser::new(tokens);
-        let expression = parser.expression();
+        let mut parser = Parser::new(tokens, Context::new());
+        let expression = parser.expression().unwrap();
         assert_eq!(
             Expression::Binary(
                 Box::new(Expression::Literal(LiteralValue::Number(1.0))), 
