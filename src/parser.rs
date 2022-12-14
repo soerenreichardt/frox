@@ -41,10 +41,7 @@ impl<'a> Parser<'a> {
     }
 
     fn equality(&mut self) -> Result<Expression> {
-        let mut expression = match self.comparison() {
-            Ok(comparison) => comparison,
-            e@Err(_) => return e
-        };
+        let mut expression = self.comparison()?;
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -54,19 +51,14 @@ impl<'a> Parser<'a> {
                 _ => break
             };
             self.token_iterator.next();
-            match self.comparison() {
-                Ok(right) => expression = Expression::Binary(Box::new(expression), Box::new(right), operator),
-                e@Err(_) => return e
-            }
+            let right = self.comparison()?;
+            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
         }
         Ok(expression)
     }
 
     fn comparison(&mut self) -> Result<Expression> {
-        let mut expression = match self.term() {
-            Ok(term) => term,
-            e@Err(_) => return e
-        };
+        let mut expression = self.term()?;
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -79,19 +71,14 @@ impl<'a> Parser<'a> {
             };
 
             self.token_iterator.next();
-            match self.term() {
-                Ok(right) => expression = Expression::Binary(Box::new(expression), Box::new(right), operator),
-                e@Err(_) => return e
-            }
+            let right = self.term()?;
+            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
         }
         Ok(expression)
     }
 
     fn term(&mut self) -> Result<Expression> {
-        let mut expression = match self.factor() {
-            Ok(factor) => factor,
-            Err(error) => return Err(error)
-        };
+        let mut expression = self.factor()?;
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -102,19 +89,14 @@ impl<'a> Parser<'a> {
             };
 
             self.token_iterator.next();
-            match self.factor() {
-                Ok(right) => expression = Expression::Binary(Box::new(expression), Box::new(right), operator),
-                e@Err(_) => return e
-            }
+            let right = self.factor()?;
+            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
         }
         Ok(expression)
     }
 
     fn factor(&mut self) -> Result<Expression> {
-        let mut expression = match self.unary() {
-            Ok(unary) => unary,
-            Err(error) => return Err(error)
-        };
+        let mut expression = self.unary()?;
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -125,10 +107,8 @@ impl<'a> Parser<'a> {
             };
 
             self.token_iterator.next();
-            match self.unary() {
-                Ok(right) => expression = Expression::Binary(Box::new(expression), Box::new(right), operator),
-                e@Err(_) => return e
-            }
+            let right = self.unary()?;
+            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
         }
         Ok(expression)
     }
