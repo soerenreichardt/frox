@@ -8,16 +8,16 @@ use crate::token::*;
 use crate::error::*;
 
 pub struct Parser<'a> {
-    token_iterator: Peekable<TokenIterator<'a>>,
-    context: Context
+    token_iterator: Peekable<TokenIterator>,
+    context: Context<'a>
 }
 
-struct TokenIterator<'a> {
-    tokens: IntoIter<Token<'a>>,
+struct TokenIterator {
+    tokens: IntoIter<Token>,
 }
 
-impl<'a> Iterator for TokenIterator<'a> {
-    type Item = Token<'a>;
+impl Iterator for TokenIterator {
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.tokens.next()
@@ -25,7 +25,7 @@ impl<'a> Iterator for TokenIterator<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token<'a>>, context: Context) -> Self {
+    pub fn new(tokens: Vec<Token>, context: Context<'a>) -> Self {
         let token_holder = TokenIterator {
             tokens: tokens.into_iter()
         };
@@ -131,8 +131,10 @@ impl<'a> Parser<'a> {
                 Token { token_type: TokenType::False, .. } => Ok(Expression::Literal(LiteralValue::Boolean(false))),
                 Token { token_type: TokenType::True, .. } => Ok(Expression::Literal(LiteralValue::Boolean(true))),
                 Token { token_type: TokenType::Nil, .. } => Ok(Expression::Literal(LiteralValue::Nil)),
-                Token { token_type: TokenType::Number, lexeme, .. } => Ok(Expression::Literal(LiteralValue::Number(lexeme.parse::<f64>().unwrap()))),
-                Token { token_type: TokenType::String, lexeme, .. } => Ok(Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme).to_string()))),
+                Token { token_type: TokenType::Number, lexeme, .. } => 
+                    Ok(Expression::Literal(LiteralValue::Number(lexeme.materialize(self.context.source).parse::<f64>().unwrap()))),
+                Token { token_type: TokenType::String, lexeme, .. } => 
+                    Ok(Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme.materialize(self.context.source)).to_string()))),
                 Token { token_type: TokenType::LeftParen, .. } => {
                     self.token_iterator.next();
                     let expression = self.expression()?;
@@ -175,11 +177,11 @@ mod tests {
     #[test]
     fn should_parse_comparison_expression() {
         let tokens = vec![
-            Token::new(TokenType::Number, "1", 1),
-            Token::new(TokenType::EqualEqual, "==", 1),
-            Token::new(TokenType::Number, "2", 1)
+            Token::new(TokenType::Number, (0, 1), 1),
+            Token::new(TokenType::EqualEqual, (1, 3), 1),
+            Token::new(TokenType::Number, (3, 4), 1)
         ];
-        let mut parser = Parser::new(tokens, Context::new());
+        let mut parser = Parser::new(tokens, Context::new("1==2"));
         let expression = parser.expression().unwrap();
         assert_eq!(
             Expression::Binary(
@@ -194,11 +196,11 @@ mod tests {
     #[test]
     fn should_parse_grouping_expression() {
         let tokens = vec![
-            Token::new(TokenType::LeftParen, "(", 1),
-            Token::new(TokenType::String, "\"foo\"", 1),
-            Token::new(TokenType::RightParen, ")", 1),
+            Token::new(TokenType::LeftParen, (0, 1), 1),
+            Token::new(TokenType::String, (1, 6), 1),
+            Token::new(TokenType::RightParen, (6, 7), 1),
         ];
-        let mut parser = Parser::new(tokens, Context::new());
+        let mut parser = Parser::new(tokens, Context::new("(\"foo\""));
         let expression = parser.expression().unwrap();
         assert_eq!(
             Expression::Grouping(

@@ -54,10 +54,16 @@ pub enum TokenType {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Token<'a> {
+pub struct Token {
     pub token_type: TokenType,
-    pub lexeme: &'a str,
+    pub lexeme: Lexeme,
     line: usize
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Lexeme {
+    start: usize,
+    end: usize
 }
 
 impl FromStr for TokenType {
@@ -102,12 +108,25 @@ impl FromStr for TokenType {
     }
 }
 
-impl<'a> Token<'a> {
-    pub fn new(token_type: TokenType, lexeme: &'a str, line: usize) -> Self {
+impl Token {
+    pub fn new(token_type: TokenType, (start, end): (usize, usize), line: usize) -> Self {
         Token {
             token_type,
-            lexeme,
+            lexeme: Lexeme::new(start, end),
             line
         }
+    }
+}
+
+impl Lexeme {
+    fn new(start: usize, end: usize) -> Self {
+        Lexeme {
+            start,
+            end
+        }
+    }
+
+    pub fn materialize<'a>(&self, source: &'a str) -> &'a str {
+        &source[self.start..self.end]
     }
 }

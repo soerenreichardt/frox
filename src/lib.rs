@@ -11,9 +11,9 @@ use crate::context::*;
 use crate::parser::*;
 
 pub fn run(source: &str) {
-    let context = Context::new();
+    let context = Context::new(source);
 
-    let mut scanner = Scanner::new(source, context);
+    let mut scanner = Scanner::new(context);
     let tokens = match scanner.scan_tokens() {
         Ok(tokens) => tokens,
         Err(error) => panic!("Errors occured while scanning:\n {}", error.to_string().as_str())
