@@ -25,3 +25,7 @@ pub fn run(source: &str) {
         Err(error) => panic!("Errors occured while parsing:\n {}", error.to_string())
     };
 }
+
+pub trait Materializable<'a, T> {
+    fn materialize(&self, context: &'a Context) -> T;
+}

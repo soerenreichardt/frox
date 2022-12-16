@@ -196,6 +196,8 @@ impl<'a> Scanner<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::Materializable;
+
     use super::*;
 
     #[test]
@@ -318,7 +320,7 @@ mod tests {
         ];
 
         assert_eq!(expected, token_types);
-        assert_eq!("foo", tokens.get(3).unwrap().lexeme.materialize(source))
+        assert_eq!("foo", tokens.get(3).unwrap().lexeme.materialize(&scanner.context()))
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::vec::IntoIter;
 use crate::context::Context;
 use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue};
 use crate::{expression::Expression};
-use crate::token::*;
+use crate::{token::*, Materializable};
 use crate::error::*;
 
 pub struct Parser<'a> {
@@ -132,9 +132,9 @@ impl<'a> Parser<'a> {
                 Token { token_type: TokenType::True, .. } => Ok(Expression::Literal(LiteralValue::Boolean(true))),
                 Token { token_type: TokenType::Nil, .. } => Ok(Expression::Literal(LiteralValue::Nil)),
                 Token { token_type: TokenType::Number, lexeme, .. } => 
-                    Ok(Expression::Literal(LiteralValue::Number(lexeme.materialize(self.context.source).parse::<f64>().unwrap()))),
+                    Ok(Expression::Literal(LiteralValue::Number(lexeme.materialize(&self.context).parse::<f64>().unwrap()))),
                 Token { token_type: TokenType::String, lexeme, .. } => 
-                    Ok(Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme.materialize(self.context.source)).to_string()))),
+                    Ok(Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme.materialize(&self.context)).to_string()))),
                 Token { token_type: TokenType::LeftParen, .. } => {
                     self.token_iterator.next();
                     let expression = self.expression()?;

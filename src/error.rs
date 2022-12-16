@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use crate::token::Token;
-
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq)]

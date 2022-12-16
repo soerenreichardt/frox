@@ -1,6 +1,6 @@
 use std::{str::FromStr};
 
-use crate::error::{Error};
+use crate::{error::{Error}, Materializable};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
@@ -125,8 +125,10 @@ impl Lexeme {
             end
         }
     }
+}
 
-    pub fn materialize<'a>(&self, source: &'a str) -> &'a str {
-        &source[self.start..self.end]
+impl<'a> Materializable<'a, &'a str> for Lexeme {
+    fn materialize(&self, context: &'a crate::context::Context) -> &'a str {
+        &context.source[self.start..self.end]
     }
 }

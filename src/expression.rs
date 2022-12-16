@@ -1,11 +1,18 @@
 use std::fmt::Display;
 
+use crate::token::Lexeme;
+
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Binary(Box<Expression>, Box<Expression>, BinaryOperator),
     Grouping(Box<Expression>),
     Literal(LiteralValue),
     Unary(UnaryOperator, Box<Expression>),
+}
+
+pub struct MaterializableExpression {
+    expression: Expression,
+    lexeme: Lexeme
 }
 
 #[derive(Debug, PartialEq)]
@@ -70,5 +77,11 @@ impl Display for UnaryOperator {
             Self::Minus => f.write_str("-"),
             Self::Not => f.write_str("!")
         }
+    }
+}
+
+impl MaterializableExpression {
+    fn new(expression: Expression, lexeme: Lexeme) -> Self {
+        MaterializableExpression { expression, lexeme }
     }
 }
