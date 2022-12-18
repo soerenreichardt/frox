@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::vec::IntoIter;
 
 use crate::context::Context;
-use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue};
+use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue, MaterializableExpression};
 use crate::{expression::Expression};
 use crate::{token::*, Materializable};
 use crate::error::*;
@@ -36,12 +36,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn expression(&mut self) -> Result<Expression> {
+    pub fn expression(&mut self) -> Result<MaterializableExpression> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Result<Expression> {
-        let mut expression = self.comparison()?;
+    fn equality(&mut self) -> Result<MaterializableExpression> {
+        let mut materializable_expression = self.comparison()?;
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -52,13 +52,16 @@ impl<'a> Parser<'a> {
             };
             self.token_iterator.next();
             let right = self.comparison()?;
-            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
+            materializable_expression = MaterializableExpression::new(
+                Expression::Binary(Box::new(materializable_expression.expression), Box::new(right.expression), operator),
+                materializable_expression.lexeme.union(&right.lexeme)
+            );
         }
-        Ok(expression)
+        Ok(materializable_expression)
     }
 
-    fn comparison(&mut self) -> Result<Expression> {
-        let mut expression = self.term()?;
+    fn comparison(&mut self) -> Result<MaterializableExpression> {
+        let mut materializable_expression = self.term()?;
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -72,13 +75,16 @@ impl<'a> Parser<'a> {
 
             self.token_iterator.next();
             let right = self.term()?;
-            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
+            materializable_expression = MaterializableExpression::new(
+                Expression::Binary(Box::new(materializable_expression.expression), Box::new(right.expression), operator),
+                materializable_expression.lexeme.union(&right.lexeme)
+            );
         }
-        Ok(expression)
+        Ok(materializable_expression)
     }
 
-    fn term(&mut self) -> Result<Expression> {
-        let mut expression = self.factor()?;
+    fn term(&mut self) -> Result<MaterializableExpression> {
+        let mut materializable_expression = self.factor()?;
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -90,13 +96,16 @@ impl<'a> Parser<'a> {
 
             self.token_iterator.next();
             let right = self.factor()?;
-            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
+            materializable_expression = MaterializableExpression::new(
+                Expression::Binary(Box::new(materializable_expression.expression), Box::new(right.expression), operator),
+                materializable_expression.lexeme.union(&right.lexeme)
+            );
         }
-        Ok(expression)
+        Ok(materializable_expression)
     }
 
-    fn factor(&mut self) -> Result<Expression> {
-        let mut expression = self.unary()?;
+    fn factor(&mut self) -> Result<MaterializableExpression> {
+        let mut materializable_expression = self.unary()?;
 
         loop {
             let token_type = self.token_iterator.peek().map(|token| token.token_type);
@@ -108,12 +117,15 @@ impl<'a> Parser<'a> {
 
             self.token_iterator.next();
             let right = self.unary()?;
-            expression = Expression::Binary(Box::new(expression), Box::new(right), operator);
+            materializable_expression = MaterializableExpression::new(
+                Expression::Binary(Box::new(materializable_expression.expression), Box::new(right.expression), operator),
+                materializable_expression.lexeme.union(&right.lexeme)
+            );
         }
-        Ok(expression)
+        Ok(materializable_expression)
     }
 
-    fn unary(&mut self) -> Result<Expression> {
+    fn unary(&mut self) -> Result<MaterializableExpression> {
         let token_type = self.token_iterator.peek().map(|token| token.token_type);
         let operator = match token_type {
             Some(TokenType::Bang) => UnaryOperator::Not,
@@ -122,41 +134,70 @@ impl<'a> Parser<'a> {
         };
 
         self.token_iterator.next();
-        self.unary().map(|right| Expression::Unary(operator, Box::new(right)))
+        let materializable_expression = self.unary()?;
+        Ok(MaterializableExpression::new(
+            Expression::Unary(operator, Box::new(materializable_expression.expression)),
+            materializable_expression.lexeme
+        ))
     }
 
-    fn primary(&mut self) -> Result<Expression> {
-        let expression = match self.token_iterator.peek() {
+    fn primary(&mut self) -> Result<MaterializableExpression> {
+        let materializable_expression = match self.token_iterator.peek() {
             Some(token) => match token {
-                Token { token_type: TokenType::False, .. } => Ok(Expression::Literal(LiteralValue::Boolean(false))),
-                Token { token_type: TokenType::True, .. } => Ok(Expression::Literal(LiteralValue::Boolean(true))),
-                Token { token_type: TokenType::Nil, .. } => Ok(Expression::Literal(LiteralValue::Nil)),
+                Token { token_type: TokenType::False, .. } => 
+                    Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(false)), token.lexeme)),
+                Token { token_type: TokenType::True, .. } => 
+                    Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(true)), token.lexeme)),
+                Token { token_type: TokenType::Nil, .. } => 
+                    Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Nil), token.lexeme)),
                 Token { token_type: TokenType::Number, lexeme, .. } => 
-                    Ok(Expression::Literal(LiteralValue::Number(lexeme.materialize(&self.context).parse::<f64>().unwrap()))),
+                    Ok(MaterializableExpression::new(
+                        Expression::Literal(LiteralValue::Number(lexeme.materialize(&self.context).parse::<f64>().unwrap())),
+                        token.lexeme
+                    )),
                 Token { token_type: TokenType::String, lexeme, .. } => 
-                    Ok(Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme.materialize(&self.context)).to_string()))),
+                    Ok(MaterializableExpression::new(
+                        Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme.materialize(&self.context)).to_string())),
+                        token.lexeme
+                    )),
                 Token { token_type: TokenType::LeftParen, .. } => {
-                    self.token_iterator.next();
-                    let expression = self.expression()?;
-                    self.consume(&TokenType::RightParen)?;
-                    Ok(Expression::Grouping(Box::new(expression)))
+                    Ok(MaterializableExpression::new(
+                        // This expression is a dummy as the correct inner expression will be
+                        // evaluated after this match block.
+                        Expression::Grouping(Box::new(Expression::Literal(LiteralValue::Nil))),
+                        token.lexeme
+                    ))
                 },
                 _ => Err(Error::ParserError("Could not match expression".to_string()))
             },
             None => Err(Error::ParserError("Reached end of file while parsing".to_string()))
         }?;
         
+        let materializable_expression = match materializable_expression {
+            MaterializableExpression { expression: Expression::Grouping(_), lexeme } => {
+                self.token_iterator.next();
+                let materializable_expression = self.expression()?;
+                let found_parenthesis = self.consume(&TokenType::RightParen)?;
+                MaterializableExpression::new(
+                    Expression::Grouping(Box::new(materializable_expression.expression)),
+                    lexeme.union(&found_parenthesis.lexeme)
+                )
+            }
+            expr => expr
+        };
+
         self.token_iterator.next();
-        Ok(expression)
+        Ok(materializable_expression)
     }
 
-    fn consume(&mut self, expected_token_type: &TokenType) -> Result<()> {
-        match self.token_iterator.peek().map(|token| token.token_type) {
-            Some(token_type) if &token_type == expected_token_type => {
-                self.token_iterator.next();
-                Ok(())
-            },
-            Some(_) | None => Err(Error::ParserError(format!("Expected token to be of type {:?}", expected_token_type)))
+    fn consume(&mut self, expected_token_type: &TokenType) -> Result<Token> {
+        let found_token = self.token_iterator.next_if(|token| 
+            if &token.token_type == expected_token_type { return true } else { return false }
+        );
+
+        match found_token {
+            Some(token) => Ok(token),
+            None =>  Err(Error::ParserError(format!("Expected token to be of type {:?}", expected_token_type)))
         }
     }
 
@@ -189,7 +230,7 @@ mod tests {
                 Box::new(Expression::Literal(LiteralValue::Number(2.0))), 
                 BinaryOperator::Compare
             ),
-            expression
+            expression.expression
         );
     }
 
@@ -206,7 +247,7 @@ mod tests {
             Expression::Grouping(
                 Box::new(Expression::Literal(LiteralValue::String("foo".to_string())))
             ),
-            expression
+            expression.expression
         )
     }
 }

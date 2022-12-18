@@ -60,7 +60,7 @@ pub struct Token {
     line: usize
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Lexeme {
     start: usize,
     end: usize
@@ -123,6 +123,13 @@ impl Lexeme {
         Lexeme {
             start,
             end
+        }
+    }
+
+    pub fn union(&self, other: &Self) -> Self {
+        Lexeme { 
+            start: usize::min(self.start, other.start), 
+            end: usize::max(self.end, other.end) 
         }
     }
 }

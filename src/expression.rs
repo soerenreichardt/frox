@@ -11,8 +11,8 @@ pub enum Expression {
 }
 
 pub struct MaterializableExpression {
-    expression: Expression,
-    lexeme: Lexeme
+    pub expression: Expression,
+    pub lexeme: Lexeme
 }
 
 #[derive(Debug, PartialEq)]
@@ -81,7 +81,7 @@ impl Display for UnaryOperator {
 }
 
 impl MaterializableExpression {
-    fn new(expression: Expression, lexeme: Lexeme) -> Self {
+    pub fn new(expression: Expression, lexeme: Lexeme) -> Self {
         MaterializableExpression { expression, lexeme }
     }
 }
