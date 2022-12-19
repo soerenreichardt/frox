@@ -1,11 +1,13 @@
 use std::fmt::Display;
 
+use crate::token::Lexeme;
+
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
     ScannerError(String),
-    ParserError(String)
+    ParserError(String, Option<Lexeme>)
 }
 
 pub struct ErrorCollector {
@@ -72,7 +74,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ScannerError(message) => f.write_str(message),
-            Self::ParserError(message) => f.write_str(message)
+            Self::ParserError(message, lexeme) => f.write_str(message)
         }
     }
 }

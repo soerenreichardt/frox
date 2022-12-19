@@ -3,7 +3,7 @@ use std::vec::IntoIter;
 
 use crate::context::Context;
 use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue, MaterializableExpression};
-use crate::{expression::Expression};
+use crate::expression::Expression;
 use crate::{token::*, Materializable};
 use crate::error::*;
 
@@ -168,9 +168,9 @@ impl<'a> Parser<'a> {
                         token.lexeme
                     ))
                 },
-                _ => Err(Error::ParserError("Could not match expression".to_string()))
+                _ => Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme)))
             },
-            None => Err(Error::ParserError("Reached end of file while parsing".to_string()))
+            None => Err(Error::ParserError("Reached end of file while parsing".to_string(), None))
         }?;
         
         let materializable_expression = match materializable_expression {
@@ -190,14 +190,11 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn consume(&mut self, expected_token_type: &TokenType) -> Result<Token> {
-        let found_token = self.token_iterator.next_if(|token| 
-            if &token.token_type == expected_token_type { return true } else { return false }
-        );
-
-        match found_token {
-            Some(token) => Ok(token),
-            None =>  Err(Error::ParserError(format!("Expected token to be of type {:?}", expected_token_type)))
+    fn consume(&mut self, expected_token_type: &TokenType) -> Result<&Token> {
+        match self.token_iterator.peek() {
+            Some(token) if &token.token_type == expected_token_type => Ok(token),
+            Some(token) => Err(Error::ParserError(format!("Expected token to be of type {:?}", expected_token_type), Some(token.lexeme))),
+            None => Err(Error::ParserError("Reached end of file while parsing".to_string(), None))
         }
     }
 
