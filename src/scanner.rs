@@ -1,5 +1,3 @@
-use std::{str::FromStr};
-
 use crate::context::Context;
 use crate::token::*;
 use crate::error::*;
@@ -32,16 +30,13 @@ impl<'a> Scanner<'a> {
             match token_type {
                 Some(token_type) => match token_type {
                     Ok(token_type) =>  self.add_token(token_type, &mut tokens),
-                    Err(error) => self.context.error_collector.collect_and_format(error, self.context.source, self.line, self.current)
+                    Err(error) => self.context.collect_error(error)
                 },
                 None => continue
             }
         }
 
-        match self.context.error_collector.flush_errors() {
-            Some(message) => Err(Error::ScannerError(message)),
-            None => Ok(tokens)
-        }
+        self.context.flush_errors(tokens)
     }
 
     pub fn context(&mut self) -> Context {
@@ -117,7 +112,7 @@ impl<'a> Scanner<'a> {
         }
 
         if self.is_at_end() {
-            return Some(Err(Error::ScannerError("Unterminated string.".to_string())));
+            return Some(Err(Error::ScannerError("Unterminated string.".to_string(), self.line, self.current)));
         }
 
         self.advance();
@@ -141,7 +136,7 @@ impl<'a> Scanner<'a> {
         let number_string = &self.context.source[self.start..self.current];
         Some(match number_string.parse::<f64>() {
             Ok(_) => Ok(TokenType::Number),
-            Err(parsing_error) => Err(Error::ScannerError(parsing_error.to_string()))
+            Err(parsing_error) => Err(Error::ScannerError(parsing_error.to_string(), self.line, self.current))
         })
     }
 
@@ -151,14 +146,14 @@ impl<'a> Scanner<'a> {
         }
 
         let substring = &self.context.source[self.start..self.current];
-        Some(match TokenType::from_str(substring) {
+        Some(match TokenType::from_str(substring, self.line, self.current) {
             a@Ok(_) => a,
             Err(_) => Ok(TokenType::Identifier)
         })
     }
 
     fn parse_operator(&mut self, substring: &'a str) -> Option<Result<TokenType>> {
-        match TokenType::from_str(substring) {
+        match TokenType::from_str(substring, self.line, self.current) {
             b@Ok(TokenType::Bang) => if self.match_token("=") { Some(Ok(TokenType::BangEqual)) } else { Some(b) },
             e@Ok(TokenType::Equal) => if self.match_token("=") { Some(Ok(TokenType::EqualEqual)) } else { Some(e) },
             l@Ok(TokenType::Less) => if self.match_token("=") { Some(Ok(TokenType::LessEqual)) } else { Some(l) },
@@ -343,7 +338,9 @@ mod tests {
         let context = Context::new("{}[");
         let mut scanner = Scanner::new(context);
         let tokens = scanner.scan_tokens();
-        let expected = Error::ScannerError(format!("Error occured on line 1:\n{{}}[\n  ^\n  Unexpected character: `[`").to_string());
+        let expected = Error::FroxError(
+            format!("Error occured on line 1:\n{{}}[\n  ^\n  Unexpected character: `[`").to_string(),
+        );
 
         assert_eq!(tokens.is_err(), true);
         assert_eq!(expected, tokens.err().unwrap());

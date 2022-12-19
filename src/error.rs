@@ -1,21 +1,30 @@
 use std::fmt::Display;
 
-use crate::token::Lexeme;
+use crate::{token::Lexeme};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    ScannerError(String),
+    FroxError(String),
+    ScannerError(String, usize, usize),
     ParserError(String, Option<Lexeme>)
 }
 
 pub struct ErrorCollector {
-    errors: Vec<String>
+    errors: Vec<Error>
 }
 
 impl Error {
-    fn format_error(&self, source: &str, line: usize, position: usize) -> String {
+    fn format_error(&self, source: &str) -> String {
+        match self {
+            Self::ScannerError(message, line, position) => Self::format_scanner_error(source, message.as_str(), *line, *position),
+            Self::ParserError(message, lexeme) => panic!(),
+            Self::FroxError(_) => panic!("Cannot format error of type FroxError")
+        }
+    }
+
+    fn format_scanner_error(source: &str, error_message: &str, line: usize, position: usize) -> String {
         let mut position = position;
         let lines = source.lines().collect::<Vec<_>>();
         for line in &lines[0..line-1] {
@@ -25,7 +34,7 @@ impl Error {
         let error_line = lines[line - 1];
         let spacing = " ".repeat(position - 1);
         let marker = format!("{}^", spacing);
-        let message = format!("{}{}", spacing, self.to_string());
+        let message = format!("{}{}", spacing, error_message);
         format!(
             "Error occured on line {}:\n{}\n{}\n{}", 
             line, 
@@ -41,18 +50,14 @@ impl ErrorCollector {
         ErrorCollector { errors: Vec::new() }
     }
 
-    pub fn collect_and_format(&mut self, error: Error, source: &str, line: usize, position: usize) {
-        let message = error.format_error(source, line, position);
-        self.errors.push(message)
-    }
-
     pub fn collect(&mut self, error: Error) {
-        self.errors.push(error.to_string())
+        self.errors.push(error)
     }
 
-    pub fn flush_errors(&mut self) -> Option<String> {
+    pub fn flush_errors(&mut self, source: &str) -> Option<String> {
         if self.contains_errors() {
-            let message = self.to_string();
+            let message = self.join_errors(source, "
+            ");
             self.errors.clear();
             return Some(message)
         }
@@ -61,6 +66,13 @@ impl ErrorCollector {
 
     fn contains_errors(&self) -> bool {
         self.errors.len() > 0
+    }
+
+    fn join_errors(&self, source: &str, separator: &str) -> String {
+        self.errors
+            .iter()
+            .map(|error| error.format_error(source))
+            .collect::<Vec<_>>().join(separator)
     }
 }
 
@@ -73,18 +85,9 @@ impl Default for ErrorCollector {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ScannerError(message) => f.write_str(message),
-            Self::ParserError(message, lexeme) => f.write_str(message)
+            Self::FroxError(message) => f.write_str(message),            
+            Self::ScannerError(message, ..) => f.write_str(message),            
+            Self::ParserError(message, ..) => f.write_str(message)            
         }
-    }
-}
-
-impl Display for ErrorCollector {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.errors
-            .iter()
-            .map(|error| error.to_string())
-            .collect::<Vec<_>>().join("
-        ").as_str())
     }
 }

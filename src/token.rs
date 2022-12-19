@@ -66,10 +66,8 @@ pub struct Lexeme {
     end: usize
 }
 
-impl FromStr for TokenType {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl TokenType {
+    pub fn from_str(s: &str, line: usize, position: usize) -> Result<Self, Error> {
         match s {
             "(" => Ok(TokenType::LeftParen),
             ")" => Ok(TokenType::RightParen),
@@ -103,7 +101,7 @@ impl FromStr for TokenType {
             "true" => Ok(TokenType::True),
             "var" => Ok(TokenType::Var),
             "while" => Ok(TokenType::While),
-            _ => Err(Error::ScannerError(format!("Unexpected character: `{s}`").to_string()))
+            _ => Err(Error::ScannerError(format!("Unexpected character: `{s}`").to_string(), line, position))
         }
     }
 }
