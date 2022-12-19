@@ -143,33 +143,31 @@ impl<'a> Parser<'a> {
 
     fn primary(&mut self) -> Result<MaterializableExpression> {
         let materializable_expression = match self.token_iterator.peek() {
-            Some(token) => match token {
-                Token { token_type: TokenType::False, .. } => 
-                    Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(false)), token.lexeme)),
-                Token { token_type: TokenType::True, .. } => 
-                    Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(true)), token.lexeme)),
-                Token { token_type: TokenType::Nil, .. } => 
-                    Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Nil), token.lexeme)),
-                Token { token_type: TokenType::Number, lexeme, .. } => 
-                    Ok(MaterializableExpression::new(
-                        Expression::Literal(LiteralValue::Number(lexeme.materialize(&self.context).parse::<f64>().unwrap())),
-                        token.lexeme
-                    )),
-                Token { token_type: TokenType::String, lexeme, .. } => 
-                    Ok(MaterializableExpression::new(
-                        Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme.materialize(&self.context)).to_string())),
-                        token.lexeme
-                    )),
-                Token { token_type: TokenType::LeftParen, .. } => {
-                    Ok(MaterializableExpression::new(
-                        // This expression is a dummy as the correct inner expression will be
-                        // evaluated after this match block.
-                        Expression::Grouping(Box::new(Expression::Literal(LiteralValue::Nil))),
-                        token.lexeme
-                    ))
-                },
-                _ => Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme)))
+            Some(token@Token { token_type: TokenType::False, .. }) => 
+                Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(false)), token.lexeme)),
+            Some(token@Token { token_type: TokenType::True, .. }) =>
+                Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(true)), token.lexeme)),
+            Some(token@Token { token_type: TokenType::Nil, .. }) => 
+                Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Nil), token.lexeme)),
+            Some(token@Token { token_type: TokenType::Number, lexeme, .. }) => 
+                Ok(MaterializableExpression::new(
+                    Expression::Literal(LiteralValue::Number(lexeme.materialize(&self.context).parse::<f64>().unwrap())),
+                    token.lexeme
+                )),
+            Some(token@Token { token_type: TokenType::String, lexeme, .. }) => 
+                Ok(MaterializableExpression::new(
+                    Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme.materialize(&self.context)).to_string())),
+                    token.lexeme
+                )),
+            Some(token@Token { token_type: TokenType::LeftParen, .. }) => {
+                Ok(MaterializableExpression::new(
+                    // This expression is a dummy as the correct inner expression will be
+                    // evaluated after this match block.
+                    Expression::Grouping(Box::new(Expression::Literal(LiteralValue::Nil))),
+                    token.lexeme
+                ))
             },
+            Some(token) => Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme))),
             None => Err(Error::ParserError("Reached end of file while parsing".to_string(), None))
         }?;
         
