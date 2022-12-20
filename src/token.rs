@@ -62,8 +62,8 @@ pub struct Token {
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Lexeme {
-    start: usize,
-    end: usize
+    pub start: usize,
+    pub end: usize
 }
 
 impl TokenType {

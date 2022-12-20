@@ -16,10 +16,11 @@ pub struct ErrorCollector {
 }
 
 impl Error {
-    fn format_error(&self, source: &str) -> String {
+    pub fn format_error(&self, source: &str) -> String {
         match self {
             Self::ScannerError(message, line, position) => Self::format_scanner_error(source, message.as_str(), *line, *position),
-            Self::ParserError(message, lexeme) => panic!(),
+            Self::ParserError(message, Some(lexeme)) => Self::format_parser_error(source, message.as_str(), lexeme),
+            Self::ParserError(_, None) => self.to_string(),
             Self::FroxError(_) => panic!("Cannot format error of type FroxError")
         }
     }
@@ -42,6 +43,38 @@ impl Error {
             marker, 
             message
         ) 
+    }
+
+    fn format_parser_error(source: &str, error_message: &str, Lexeme {start, end: _ }: &Lexeme) -> String {
+        println!("{}", start);
+        let mut position: usize = 0;
+        let lines = source.lines().collect::<Vec<_>>();
+
+        let line = lines
+            .iter()
+            .enumerate()
+            .find(|(_, line)| {
+                if position + line.len() >= *start {
+                    return true
+                }
+                position += line.len();
+                false
+            })
+            .map(|(line_num, _)| line_num)
+            .expect("Did not find error position in source");
+
+        let position_in_line = start - position;
+        let error_line = lines[line];
+        let spacing = " ".repeat(position_in_line);
+        let marker = format!("{}^", spacing);
+        let message = format!("{}{}", spacing, error_message);
+        format!(
+            "Error occured on line {}:\n{}\n{}\n{}",
+            line,
+            error_line,
+            marker,
+            message
+        )
     }
 }
 

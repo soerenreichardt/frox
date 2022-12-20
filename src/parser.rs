@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn expression(&mut self) -> Result<MaterializableExpression> {
-        self.equality()
+        self.equality().map_err(|error| Error::FroxError(error.format_error(self.context.source)))
     }
 
     fn equality(&mut self) -> Result<MaterializableExpression> {
@@ -243,6 +243,21 @@ mod tests {
                 Box::new(Expression::Literal(LiteralValue::String("foo".to_string())))
             ),
             expression.expression
+        )
+    }
+
+    #[test]
+    fn should_print_error_when_failing_to_match_grouping() {
+        let tokens = vec![
+            Token::new(TokenType::LeftParen, (0, 1), 1),
+            Token::new(TokenType::Number, (1, 2), 1),
+            Token::new(TokenType::And, (2, 3), 1)
+        ];
+        let mut parser = Parser::new(tokens, Context::new("(1="));
+        let expression = parser.expression();
+        assert_eq!(
+            "Error occured on line 0:\n(1=\n  ^\n  Expected token to be of type RightParen",
+            expression.err().unwrap().to_string()
         )
     }
 }
