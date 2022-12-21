@@ -8,7 +8,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub enum Error {
     FroxError(String),
     ScannerError(String, usize, usize),
-    ParserError(String, Option<Lexeme>)
+    ParserError(String, Option<Lexeme>),
+    InterpreterError(String)
 }
 
 pub struct ErrorCollector {
@@ -21,6 +22,7 @@ impl Error {
             Self::ScannerError(message, line, position) => Self::format_scanner_error(source, message.as_str(), *line, *position),
             Self::ParserError(message, Some(lexeme)) => Self::format_parser_error(source, message.as_str(), lexeme),
             Self::ParserError(_, None) => self.to_string(),
+            Self::InterpreterError(_) => self.to_string(),
             Self::FroxError(_) => panic!("Cannot format error of type FroxError")
         }
     }
@@ -120,7 +122,8 @@ impl Display for Error {
         match self {
             Self::FroxError(message) => f.write_str(message),            
             Self::ScannerError(message, ..) => f.write_str(message),            
-            Self::ParserError(message, ..) => f.write_str(message)            
+            Self::ParserError(message, ..) => f.write_str(message)   ,
+            Self::InterpreterError(message) => f.write_str(message)         
         }
     }
 }

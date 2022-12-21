@@ -15,7 +15,7 @@ pub struct MaterializableExpression {
     pub lexeme: Lexeme
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum LiteralValue {
     String(String),
     Number(f64),

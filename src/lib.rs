@@ -2,6 +2,8 @@ pub mod scanner;
 pub mod token;
 pub mod expression;
 pub mod parser;
+pub mod interpreter;
+
 mod ast_printer;
 mod error;
 mod context;
