@@ -5,12 +5,20 @@ pub struct Interpreter<'a> {
     context: Context<'a>
 }
 
+#[derive(Debug, PartialEq)]
+pub enum FroxValue {
+    Number(f64),
+    String(String),
+    Boolean(bool),
+    Nil
+}
+
 impl<'a> Interpreter<'a> {
     pub fn new(context: Context<'a>) -> Self {
         Interpreter { context }
     }
 
-    pub fn evaluate(&self, materialized_expression: &MaterializableExpression) -> Result<LiteralValue> {
+    pub fn evaluate(&self, materialized_expression: &MaterializableExpression) -> Result<FroxValue> {
         match &materialized_expression.expression {
             Expression::Grouping(inner_expression) => self.evaluate(inner_expression.as_ref()),
             Expression::Unary(operator, inner_expression) => {
@@ -33,107 +41,104 @@ impl<'a> Interpreter<'a> {
                     BinaryOperator::GreaterThenOrEqual => self.greater_than_or_equal(lhs, rhs),
                     BinaryOperator::LessThan => self.less_than(lhs, rhs),
                     BinaryOperator::LessThanOrEqual => self.less_than_or_equal(lhs, rhs),
-                    BinaryOperator::Compare => Ok(LiteralValue::Boolean(self.equals(lhs, rhs))),
-                    BinaryOperator::CompareNot => Ok(LiteralValue::Boolean(!self.equals(lhs, rhs)))
+                    BinaryOperator::Compare => Ok(FroxValue::Boolean(self.equals(lhs, rhs))),
+                    BinaryOperator::CompareNot => Ok(FroxValue::Boolean(!self.equals(lhs, rhs)))
                 }
             },
-            Expression::Literal(literal_value) => Ok(literal_value.clone())
+            Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value))
         }
     }
 
-    fn minus(&self, literal: LiteralValue) -> Result<LiteralValue> {
+    fn minus(&self, literal: FroxValue) -> Result<FroxValue> {
         match literal {
-            LiteralValue::Number(number) => Ok(LiteralValue::Number(-number)),
+            FroxValue::Number(number) => Ok(FroxValue::Number(-number)),
             _ => Err(Error::InterpreterError(format!("Unary '-' operator expected number literal, but got {:?}", literal)))
         }
     }
 
-    fn not(&self, literal: LiteralValue) -> Result<LiteralValue> {
-        self.to_boolean(literal).map(|bool| LiteralValue::Boolean(bool))
+    fn not(&self, literal: FroxValue) -> Result<FroxValue> {
+        self.to_boolean(literal).map(|bool| FroxValue::Boolean(bool))
     }
 
-    fn subtract(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<LiteralValue> {
+    fn subtract(&self, lhs: FroxValue, rhs: FroxValue) -> Result<FroxValue> {
         self.apply_arithmetic_operation(lhs, rhs, |lhs, rhs| lhs - rhs)
     }
 
-    fn divide(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<LiteralValue> {
+    fn divide(&self, lhs: FroxValue, rhs: FroxValue) -> Result<FroxValue> {
         self.apply_arithmetic_operation(lhs, rhs, |lhs, rhs| lhs / rhs)
     }
 
-    fn multiply(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<LiteralValue> {
+    fn multiply(&self, lhs: FroxValue, rhs: FroxValue) -> Result<FroxValue> {
         self.apply_arithmetic_operation(lhs, rhs, |lhs, rhs| lhs * rhs)
     }
 
-    fn add(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<LiteralValue> {
+    fn add(&self, lhs: FroxValue, rhs: FroxValue) -> Result<FroxValue> {
         match (lhs, rhs) {
-            (LiteralValue::Number(left_value), LiteralValue::Number(right_value)) => Ok(LiteralValue::Number(left_value + right_value)),
-            (LiteralValue::String(left_value), LiteralValue::String(right_value)) => {
-                let mut concat_string = String::new();
-                concat_string.push_str(left_value.as_str());
-                concat_string.push_str(right_value.as_str());
-                Ok(LiteralValue::String(concat_string))
+            (FroxValue::Number(left_value), FroxValue::Number(right_value)) => Ok(FroxValue::Number(left_value + right_value)),
+            (FroxValue::String(left_value), FroxValue::String(right_value)) => {
+                Ok(FroxValue::String([left_value, right_value].concat()))
             },
             _ => Err(Error::InterpreterError("".to_string()))
         }
     }
 
-    fn less_than(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<LiteralValue> {
+    fn less_than(&self, lhs: FroxValue, rhs: FroxValue) -> Result<FroxValue> {
         self.apply_comparison(lhs, rhs, |lhs, rhs| lhs < rhs)
     }
 
-    fn less_than_or_equal(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<LiteralValue> {
+    fn less_than_or_equal(&self, lhs: FroxValue, rhs: FroxValue) -> Result<FroxValue> {
         self.apply_comparison(lhs, rhs, |lhs, rhs| lhs <= rhs)
     }
 
-    fn greater_than(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<LiteralValue> {
+    fn greater_than(&self, lhs: FroxValue, rhs: FroxValue) -> Result<FroxValue> {
         self.apply_comparison(lhs, rhs, |lhs, rhs| lhs > rhs)
     }
 
-    fn greater_than_or_equal(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<LiteralValue> {
+    fn greater_than_or_equal(&self, lhs: FroxValue, rhs: FroxValue) -> Result<FroxValue> {
         self.apply_comparison(lhs, rhs, |lhs, rhs| lhs >= rhs)
     }
 
-    fn equals(&self, lhs: LiteralValue, rhs: LiteralValue) -> bool {
+    fn equals(&self, lhs: FroxValue, rhs: FroxValue) -> bool {
         match (lhs, rhs) {
-            (LiteralValue::Number(left_value), LiteralValue::Number(right_value)) => left_value == right_value,
-            (LiteralValue::String(left_value), LiteralValue::String(right_value)) => left_value == right_value,
-            (LiteralValue::Boolean(left_value), LiteralValue::Boolean(right_value)) => left_value == right_value,
-            (LiteralValue::Nil, LiteralValue::Nil) => true,
+            (FroxValue::Number(left_value), FroxValue::Number(right_value)) => left_value == right_value,
+            (FroxValue::String(left_value), FroxValue::String(right_value)) => left_value == right_value,
+            (FroxValue::Boolean(left_value), FroxValue::Boolean(right_value)) => left_value == right_value,
+            (FroxValue::Nil, FroxValue::Nil) => true,
             _ => false
         }
     }
 
-    fn to_boolean(&self, literal: LiteralValue) -> Result<bool> {
+    fn to_boolean(&self, literal: FroxValue) -> Result<bool> {
         match literal {
-            LiteralValue::Boolean(bool) => Ok(bool),
-            LiteralValue::Nil => Ok(false),
+            FroxValue::Boolean(bool) => Ok(bool),
+            FroxValue::Nil => Ok(false),
             _ => Err(Error::InterpreterError(format!("{:?} cannot be coerced into a boolean literal", literal)))
         }
     }
 
     fn apply_arithmetic_operation<F: Fn(f64, f64) -> f64>(
         &self, 
-        lhs: LiteralValue, 
-        rhs: LiteralValue, 
+        lhs: FroxValue, 
+        rhs: FroxValue, 
         number_operation: F) 
-    -> Result<LiteralValue> {
+    -> Result<FroxValue> {
         let (left_value, right_value) = self.extract_numbers_from_literals(lhs, rhs)?;
-        Ok(LiteralValue::Number(number_operation(left_value, right_value)))
+        Ok(FroxValue::Number(number_operation(left_value, right_value)))
     }
 
     fn apply_comparison<F: Fn(f64, f64) -> bool>(
         &self, 
-        lhs: LiteralValue, 
-        rhs: LiteralValue, 
+        lhs: FroxValue, 
+        rhs: FroxValue, 
         comparison_operation: F) 
-    -> Result<LiteralValue> {
+    -> Result<FroxValue> {
         let (left_value, right_value) = self.extract_numbers_from_literals(lhs, rhs)?;
-        Ok(LiteralValue::Boolean(comparison_operation(left_value, right_value)))
+        Ok(FroxValue::Boolean(comparison_operation(left_value, right_value)))
     }
 
-    fn extract_numbers_from_literals(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<(f64, f64)> {
+    fn extract_numbers_from_literals(&self, lhs: FroxValue, rhs: FroxValue) -> Result<(f64, f64)> {
         match (lhs, rhs) {
-            (LiteralValue::Number(left_value), LiteralValue::Number(right_value)) => Ok((left_value, right_value)),
+            (FroxValue::Number(left_value), FroxValue::Number(right_value)) => Ok((left_value, right_value)),
             (left, right) => Err(Error::InterpreterError(format!("Expected both operands to be of type number, but got ({:?}, {:?})", left, right)))
         }
     }
@@ -142,6 +147,17 @@ impl<'a> Interpreter<'a> {
 impl<'a> TransferContext for Interpreter<'a> {
     fn context(&mut self) -> Context {
         std::mem::replace(&mut self.context, Context::default())
+    }
+}
+
+impl<'a> FroxValue {
+    fn from_literal_value(literal_value: &LiteralValue) -> Self {
+        match literal_value {
+            LiteralValue::Boolean(bool) => FroxValue::Boolean(*bool),
+            LiteralValue::String(string) => FroxValue::String(string.clone()),
+            LiteralValue::Number(number) => FroxValue::Number(*number),
+            LiteralValue::Nil => FroxValue::Nil
+        }
     }
 }
 
@@ -202,7 +218,7 @@ mod tests {
         ).wrap_default();
         let interpreter = Interpreter::new(Context::new(""));
         let value = match interpreter.evaluate(&expression) {
-            Ok(LiteralValue::String(value)) => value,
+            Ok(FroxValue::String(value)) => value,
             _ => panic!("{:?}", expression)
         };
 
@@ -217,7 +233,7 @@ mod tests {
         ).wrap_default();
         let interpreter = Interpreter::new(Context::new(""));
         match interpreter.evaluate(&expression) {
-            Ok(LiteralValue::Number(value)) => value,
+            Ok(FroxValue::Number(value)) => value,
             _ => panic!("{:?}", expression)
         }
     }
@@ -230,7 +246,7 @@ mod tests {
         ).wrap_default();
         let interpreter = Interpreter::new(Context::new(""));
         match interpreter.evaluate(&expression) {
-            Ok(LiteralValue::Boolean(value)) => value,
+            Ok(FroxValue::Boolean(value)) => value,
             _ => panic!("{:?}", expression)
         }
     }

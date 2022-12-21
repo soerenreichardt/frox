@@ -8,14 +8,12 @@ mod ast_printer;
 mod error;
 mod context;
 
-use expression::LiteralValue;
-
 use crate::scanner::*;
 use crate::context::*;
 use crate::parser::*;
 use crate::interpreter::*;
 
-pub fn run(source: &str) -> LiteralValue {
+pub fn run(source: &str) -> FroxValue {
     let context = Context::new(source);
 
     let mut scanner = Scanner::new(context);
@@ -39,6 +37,6 @@ mod tests {
     #[test]
     fn should_run_simple_calculation() {
         let result = run("(2 * 4) / (1 + 1)");
-        assert_eq!(LiteralValue::Number(4.0), result)
+        assert_eq!(FroxValue::Number(4.0), result)
     }
 }
