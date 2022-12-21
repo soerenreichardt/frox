@@ -1,4 +1,5 @@
 use crate::context::Context;
+use crate::context::TransferContext;
 use crate::token::*;
 use crate::error::*;
 
@@ -37,10 +38,6 @@ impl<'a> Scanner<'a> {
         }
 
         self.context.flush_errors(tokens)
-    }
-
-    pub fn context(&mut self) -> Context {
-        std::mem::replace(&mut self.context, Context::default())
     }
 
     fn is_at_end(&self) -> bool {
@@ -186,6 +183,12 @@ impl<'a> Scanner<'a> {
 
     fn is_alpha_numberic(substring: &'a str) -> bool {
         Scanner::is_digit(substring) || Scanner::is_letter(substring)
+    }
+}
+
+impl<'a> TransferContext for Scanner<'a> {
+    fn context(&mut self) -> Context {
+        std::mem::replace(&mut self.context, Context::default())
     }
 }
 

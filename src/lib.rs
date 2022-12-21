@@ -14,16 +14,10 @@ pub fn run(source: &str) {
     let context = Context::new(source);
 
     let mut scanner = Scanner::new(context);
-    let tokens = match scanner.scan_tokens() {
-        Ok(tokens) => tokens,
-        Err(error) => panic!("Errors occured while scanning:\n {}", error.to_string().as_str())
-    };
+    let tokens = scanner.scan_tokens().expect("Error while scanning");
 
     let mut parser = Parser::new(tokens, scanner.context());
-    let expression = match parser.expression() {
-        Ok(expression) => expression,
-        Err(error) => panic!("Errors occured while parsing:\n {}", error.to_string())
-    };
+    let expression = parser.expression().expect("Error while parsing");
 }
 
 pub trait Materializable<'a, T> {

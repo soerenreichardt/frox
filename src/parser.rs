@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::context::Context;
+use crate::context::{Context, TransferContext};
 use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue, MaterializableExpression};
 use crate::expression::Expression;
 use crate::{token::*, Materializable};
@@ -201,6 +201,12 @@ impl<'a> Parser<'a> {
         chars.next();
         chars.next_back();
         chars.as_str()
+    }
+}
+
+impl<'a> TransferContext for Parser<'a> {
+    fn context(&mut self) -> Context {
+        std::mem::replace(&mut self.context, Context::default())
     }
 }
 
