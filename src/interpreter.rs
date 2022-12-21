@@ -137,11 +137,95 @@ impl<'a> Interpreter<'a> {
             (left, right) => Err(Error::InterpreterError(format!("Expected both operands to be of type number, but got ({:?}, {:?})", left, right)))
         }
     }
+}
 
-    fn extract_strings_from_literals(&self, lhs: LiteralValue, rhs: LiteralValue) -> Result<(String, String)> {
-        match (lhs, rhs) {
-            (LiteralValue::String(left_value), LiteralValue::String(right_value)) => Ok((left_value, right_value)),
-            (left, right) => Err(Error::InterpreterError(format!("Expected both operands to be of type string, but got ({:?}, {:?})", left, right)))
+#[cfg(test)]
+mod tests {
+    use crate::context::Context;
+
+    use super::*;
+
+    #[test]
+    fn should_evaluate_arithmetic_expressions() {
+        let actual = evaluate_binary_arithmetic(1.0, 2.0, BinaryOperator::Add);
+        assert_eq!(3.0, actual);
+
+        let actual = evaluate_binary_arithmetic(1.0, 2.0, BinaryOperator::Subtract);
+        assert_eq!(-1.0, actual);
+
+        let actual = evaluate_binary_arithmetic(7.0, 2.0, BinaryOperator::Divide);
+        assert_eq!(3.5, actual);
+
+        let actual = evaluate_binary_arithmetic(3.0, 2.0, BinaryOperator::Multiply);
+        assert_eq!(6.0, actual);
+    }
+
+    #[test]
+    fn should_evaluate_comparisons() {
+        let actual = evaluate_comparison(LiteralValue::Number(42.0), LiteralValue::Number(42.0), BinaryOperator::Compare);
+        assert_eq!(true, actual, "42.0 == 42.0");
+
+        let actual = evaluate_comparison(LiteralValue::Number(42.0), LiteralValue::Number(42.0), BinaryOperator::CompareNot);
+        assert_eq!(false, actual, "42.0 != 42.0");
+
+        let actual = evaluate_comparison(LiteralValue::Number(42.0), LiteralValue::Number(43.0), BinaryOperator::Compare);
+        assert_eq!(false, actual, "42.0 == 43.0");
+
+        let actual = evaluate_comparison(LiteralValue::Number(42.0), LiteralValue::Number(43.0), BinaryOperator::CompareNot);
+        assert_eq!(true, actual, "42.0 != 43.0");
+
+        let actual = evaluate_comparison(LiteralValue::Number(42.0), LiteralValue::Number(42.0), BinaryOperator::LessThan);
+        assert_eq!(false, actual, "42.0 < 42.0");
+
+        let actual = evaluate_comparison(LiteralValue::Number(42.0), LiteralValue::Number(42.0), BinaryOperator::LessThanOrEqual);
+        assert_eq!(true, actual, "42.0 <= 42.0");
+
+        let actual = evaluate_comparison(LiteralValue::Nil, LiteralValue::Nil, BinaryOperator::Compare);
+        assert_eq!(true, actual, "Nil == Nil");
+
+        let actual = evaluate_comparison(LiteralValue::Nil, LiteralValue::String("foo".to_string()), BinaryOperator::Compare);
+        assert_eq!(false, actual, "Nil == \"foo\"");
+    }
+
+    #[test]
+    fn should_concatenate_strings() {
+        let expression = Expression::Binary(
+            Box::new(Expression::Literal(LiteralValue::String("foo".to_string()))), 
+            Box::new(Expression::Literal(LiteralValue::String("bar".to_string()))),
+            BinaryOperator::Add
+        );
+        let interpreter = Interpreter::new(Context::new(""));
+        let value = match interpreter.evaluate(&expression) {
+            Ok(LiteralValue::String(value)) => value,
+            _ => panic!("{:?}", expression)
+        };
+
+        assert_eq!("foobar", value, "foo + bar")
+    }
+
+    fn evaluate_binary_arithmetic(lhs: f64, rhs: f64, operator: BinaryOperator) -> f64 {
+        let expression = Expression::Binary(
+            Box::new(Expression::Literal(LiteralValue::Number(lhs))), 
+            Box::new(Expression::Literal(LiteralValue::Number(rhs))), 
+            operator
+        );
+        let interpreter = Interpreter::new(Context::new(""));
+        match interpreter.evaluate(&expression) {
+            Ok(LiteralValue::Number(value)) => value,
+            _ => panic!("{:?}", expression)
+        }
+    }
+
+    fn evaluate_comparison(lhs: LiteralValue, rhs: LiteralValue, operator: BinaryOperator) -> bool {
+        let expression = Expression::Binary(
+            Box::new(Expression::Literal(lhs)), 
+            Box::new(Expression::Literal(rhs)), 
+            operator
+        );
+        let interpreter = Interpreter::new(Context::new(""));
+        match interpreter.evaluate(&expression) {
+            Ok(LiteralValue::Boolean(value)) => value,
+            _ => panic!("{:?}", expression)
         }
     }
 }

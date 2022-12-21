@@ -1,6 +1,4 @@
-use std::{str::FromStr};
-
-use crate::{error::{Error}, Materializable};
+use crate::{error::Error, Materializable};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
