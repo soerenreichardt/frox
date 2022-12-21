@@ -25,7 +25,7 @@ pub fn run(source: &str) -> LiteralValue {
     let expression = parser.expression().expect("Error while parsing");
 
     let interpreter = Interpreter::new(parser.context());
-    interpreter.evaluate(&expression.expression).expect("Runtime error")
+    interpreter.evaluate(&expression).expect("Runtime error")
 }
 
 pub trait Materializable<'a, T> {

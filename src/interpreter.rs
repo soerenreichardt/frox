@@ -1,4 +1,4 @@
-use crate::{context::{Context, TransferContext}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator}, error::Error};
+use crate::{context::{Context, TransferContext}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
@@ -10,19 +10,19 @@ impl<'a> Interpreter<'a> {
         Interpreter { context }
     }
 
-    pub fn evaluate(&self, expression: &Expression) -> Result<LiteralValue> {
-        match expression {
+    pub fn evaluate(&self, materialized_expression: &MaterializableExpression) -> Result<LiteralValue> {
+        match &materialized_expression.expression {
             Expression::Grouping(inner_expression) => self.evaluate(inner_expression.as_ref()),
             Expression::Unary(operator, inner_expression) => {
-                let right = self.evaluate(inner_expression)?;
+                let right = self.evaluate(&inner_expression)?;
                 match operator {
                     UnaryOperator::Minus => self.minus(right),
                     UnaryOperator::Not => self.not(right)
                 }
             },
             Expression::Binary(left, right, operator) => {
-                let lhs = self.evaluate(left)?;
-                let rhs = self.evaluate(right)?;
+                let lhs = self.evaluate(&left)?;
+                let rhs = self.evaluate(&right)?;
                 match operator {
                     BinaryOperator::Subtract => self.subtract(lhs, rhs),
                     BinaryOperator::Divide => self.divide(lhs, rhs),
@@ -196,10 +196,10 @@ mod tests {
     #[test]
     fn should_concatenate_strings() {
         let expression = Expression::Binary(
-            Box::new(Expression::Literal(LiteralValue::String("foo".to_string()))), 
-            Box::new(Expression::Literal(LiteralValue::String("bar".to_string()))),
+            Box::new(Expression::Literal(LiteralValue::String("foo".to_string())).wrap_default()), 
+            Box::new(Expression::Literal(LiteralValue::String("bar".to_string())).wrap_default()),
             BinaryOperator::Add
-        );
+        ).wrap_default();
         let interpreter = Interpreter::new(Context::new(""));
         let value = match interpreter.evaluate(&expression) {
             Ok(LiteralValue::String(value)) => value,
@@ -211,10 +211,10 @@ mod tests {
 
     fn evaluate_binary_arithmetic(lhs: f64, rhs: f64, operator: BinaryOperator) -> f64 {
         let expression = Expression::Binary(
-            Box::new(Expression::Literal(LiteralValue::Number(lhs))), 
-            Box::new(Expression::Literal(LiteralValue::Number(rhs))), 
+            Box::new(Expression::Literal(LiteralValue::Number(lhs)).wrap_default()), 
+            Box::new(Expression::Literal(LiteralValue::Number(rhs)).wrap_default()), 
             operator
-        );
+        ).wrap_default();
         let interpreter = Interpreter::new(Context::new(""));
         match interpreter.evaluate(&expression) {
             Ok(LiteralValue::Number(value)) => value,
@@ -224,10 +224,10 @@ mod tests {
 
     fn evaluate_comparison(lhs: LiteralValue, rhs: LiteralValue, operator: BinaryOperator) -> bool {
         let expression = Expression::Binary(
-            Box::new(Expression::Literal(lhs)), 
-            Box::new(Expression::Literal(rhs)), 
+            Box::new(Expression::Literal(lhs).wrap_default()), 
+            Box::new(Expression::Literal(rhs).wrap_default()), 
             operator
-        );
+        ).wrap_default();
         let interpreter = Interpreter::new(Context::new(""));
         match interpreter.evaluate(&expression) {
             Ok(LiteralValue::Boolean(value)) => value,

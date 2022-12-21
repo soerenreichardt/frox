@@ -4,12 +4,13 @@ use crate::token::Lexeme;
 
 #[derive(Debug, PartialEq)]
 pub enum Expression {
-    Binary(Box<Expression>, Box<Expression>, BinaryOperator),
-    Grouping(Box<Expression>),
+    Binary(Box<MaterializableExpression>, Box<MaterializableExpression>, BinaryOperator),
+    Grouping(Box<MaterializableExpression>),
     Literal(LiteralValue),
-    Unary(UnaryOperator, Box<Expression>),
+    Unary(UnaryOperator, Box<MaterializableExpression>),
 }
 
+#[derive(Debug, PartialEq)]
 pub struct MaterializableExpression {
     pub expression: Expression,
     pub lexeme: Lexeme
@@ -77,6 +78,16 @@ impl Display for UnaryOperator {
             Self::Minus => f.write_str("-"),
             Self::Not => f.write_str("!")
         }
+    }
+}
+
+impl Expression {
+    pub fn wrap_default(self) -> MaterializableExpression {
+        MaterializableExpression::new(self, Lexeme::default())
+    }
+
+    pub fn wrap(self, lexeme: Lexeme) -> MaterializableExpression {
+        MaterializableExpression::new(self, lexeme)
     }
 }
 

@@ -52,9 +52,10 @@ impl<'a> Parser<'a> {
             };
             self.token_iterator.next();
             let right = self.comparison()?;
+            let union_lexeme = materializable_expression.lexeme.union(&right.lexeme);
             materializable_expression = MaterializableExpression::new(
-                Expression::Binary(Box::new(materializable_expression.expression), Box::new(right.expression), operator),
-                materializable_expression.lexeme.union(&right.lexeme)
+                Expression::Binary(Box::new(materializable_expression), Box::new(right), operator),
+                union_lexeme
             );
         }
         Ok(materializable_expression)
@@ -75,9 +76,10 @@ impl<'a> Parser<'a> {
 
             self.token_iterator.next();
             let right = self.term()?;
+            let union_lexeme = materializable_expression.lexeme.union(&right.lexeme);
             materializable_expression = MaterializableExpression::new(
-                Expression::Binary(Box::new(materializable_expression.expression), Box::new(right.expression), operator),
-                materializable_expression.lexeme.union(&right.lexeme)
+                Expression::Binary(Box::new(materializable_expression), Box::new(right), operator),
+                union_lexeme
             );
         }
         Ok(materializable_expression)
@@ -96,9 +98,10 @@ impl<'a> Parser<'a> {
 
             self.token_iterator.next();
             let right = self.factor()?;
+            let union_lexeme = materializable_expression.lexeme.union(&right.lexeme);
             materializable_expression = MaterializableExpression::new(
-                Expression::Binary(Box::new(materializable_expression.expression), Box::new(right.expression), operator),
-                materializable_expression.lexeme.union(&right.lexeme)
+                Expression::Binary(Box::new(materializable_expression), Box::new(right), operator),
+                union_lexeme
             );
         }
         Ok(materializable_expression)
@@ -117,9 +120,10 @@ impl<'a> Parser<'a> {
 
             self.token_iterator.next();
             let right = self.unary()?;
+            let union_lexeme = materializable_expression.lexeme.union(&right.lexeme);
             materializable_expression = MaterializableExpression::new(
-                Expression::Binary(Box::new(materializable_expression.expression), Box::new(right.expression), operator),
-                materializable_expression.lexeme.union(&right.lexeme)
+                Expression::Binary(Box::new(materializable_expression), Box::new(right), operator),
+                union_lexeme
             );
         }
         Ok(materializable_expression)
@@ -135,9 +139,10 @@ impl<'a> Parser<'a> {
 
         self.token_iterator.next();
         let materializable_expression = self.unary()?;
+        let lexeme = materializable_expression.lexeme;
         Ok(MaterializableExpression::new(
-            Expression::Unary(operator, Box::new(materializable_expression.expression)),
-            materializable_expression.lexeme
+            Expression::Unary(operator, Box::new(materializable_expression)),
+            lexeme
         ))
     }
 
@@ -163,7 +168,7 @@ impl<'a> Parser<'a> {
                 Ok(MaterializableExpression::new(
                     // This expression is a dummy as the correct inner expression will be
                     // evaluated after this match block.
-                    Expression::Grouping(Box::new(Expression::Literal(LiteralValue::Nil))),
+                    Expression::Grouping(Box::new(MaterializableExpression::new(Expression::Literal(LiteralValue::Nil), token.lexeme))),
                     token.lexeme
                 ))
             },
@@ -177,7 +182,7 @@ impl<'a> Parser<'a> {
                 let materializable_expression = self.expression()?;
                 let found_parenthesis = self.consume(&TokenType::RightParen)?;
                 MaterializableExpression::new(
-                    Expression::Grouping(Box::new(materializable_expression.expression)),
+                    Expression::Grouping(Box::new(materializable_expression)),
                     lexeme.union(&found_parenthesis.lexeme)
                 )
             }
@@ -227,11 +232,11 @@ mod tests {
         let expression = parser.expression().unwrap();
         assert_eq!(
             Expression::Binary(
-                Box::new(Expression::Literal(LiteralValue::Number(1.0))), 
-                Box::new(Expression::Literal(LiteralValue::Number(2.0))), 
+                Box::new(Expression::Literal(LiteralValue::Number(1.0)).wrap(Lexeme::new(0, 1))), 
+                Box::new(Expression::Literal(LiteralValue::Number(2.0)).wrap(Lexeme::new(3, 4))), 
                 BinaryOperator::Compare
-            ),
-            expression.expression
+            ).wrap(Lexeme::new(0, 4)),
+            expression
         );
     }
 
@@ -246,9 +251,9 @@ mod tests {
         let expression = parser.expression().unwrap();
         assert_eq!(
             Expression::Grouping(
-                Box::new(Expression::Literal(LiteralValue::String("foo".to_string())))
-            ),
-            expression.expression
+                Box::new(Expression::Literal(LiteralValue::String("foo".to_string())).wrap(Lexeme::new(1, 6)))
+            ).wrap(Lexeme::new(0, 7)),
+            expression
         )
     }
 

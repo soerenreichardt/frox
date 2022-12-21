@@ -58,7 +58,7 @@ pub struct Token {
     line: usize
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Default)]
 pub struct Lexeme {
     pub start: usize,
     pub end: usize
@@ -115,7 +115,7 @@ impl Token {
 }
 
 impl Lexeme {
-    fn new(start: usize, end: usize) -> Self {
+    pub fn new(start: usize, end: usize) -> Self {
         Lexeme {
             start,
             end
