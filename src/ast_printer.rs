@@ -43,7 +43,7 @@ mod tests {
         let expression = Box::new(Expression::Binary(
             Box::new(Expression::Unary(
                 UnaryOperator::Minus, 
-                Box::new(Expression::Literal(LiteralValue::String("123".to_string())).wrap_default())
+                Box::new(Expression::Literal(LiteralValue::String("123")).wrap_default())
             ).wrap_default()), 
             Box::new(Expression::Grouping(
                 Box::new(Expression::Literal(LiteralValue::Number(45.67)).wrap_default())

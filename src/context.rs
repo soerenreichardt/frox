@@ -5,10 +5,6 @@ pub struct Context<'a> {
     pub error_collector: ErrorCollector
 }
 
-pub trait TransferContext {
-    fn context(&mut self) -> Context;
-}
-
 impl<'a> Context<'a> {
     pub fn new(source: &'a str) -> Self {
         Context {

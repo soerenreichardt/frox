@@ -1,5 +1,4 @@
 use crate::context::Context;
-use crate::context::TransferContext;
 use crate::token::*;
 use crate::error::*;
 
@@ -11,9 +10,9 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Scanner<'a> {
-    pub fn new(context: Context<'a>) -> Self {
+    pub fn new(source: &'a str) -> Self {
         Scanner {
-            context,
+            context: Context::new(source),
             start: 0,
             current: 0,
             line: 1
@@ -186,12 +185,6 @@ impl<'a> Scanner<'a> {
     }
 }
 
-impl<'a> TransferContext for Scanner<'a> {
-    fn context(&mut self) -> Context {
-        std::mem::replace(&mut self.context, Context::default())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::Materializable;
@@ -200,8 +193,7 @@ mod tests {
 
     #[test]
     fn should_parse_token_types() {
-        let context = Context::new("{}(),.-+;*/!!===<<=>>=");
-        let mut scanner = Scanner::new(context);
+        let mut scanner = Scanner::new("{}(),.-+;*/!!===<<=>>=");
         let tokens = scanner.scan_tokens().unwrap();
         let token_types = tokens.iter()
             .map(|token| &token.token_type)
@@ -232,8 +224,7 @@ mod tests {
 
     #[test]
     fn should_parse_comment() {
-        let context = Context::new("//some comment");
-        let mut scanner = Scanner::new(context);
+        let mut scanner = Scanner::new("//some comment");
         let tokens = scanner.scan_tokens().unwrap();
         let token_types = tokens.iter()
             .map(|token| &token.token_type)
@@ -245,8 +236,7 @@ mod tests {
 
     #[test]
     fn should_ignore_whitespace_with_comment() {
-        let context = Context::new("(( )){} // grouping stuff");
-        let mut scanner = Scanner::new(context);
+        let mut scanner = Scanner::new("(( )){} // grouping stuff");
         let tokens = scanner.scan_tokens().unwrap();
         let token_types = tokens.iter()
             .map(|token| &token.token_type)
@@ -266,10 +256,9 @@ mod tests {
 
     #[test]
     fn should_increment_counter_on_line_break() {
-        let context = Context::new("(
+        let mut scanner = Scanner::new("(
             // comment, but still count the newline
         )");
-        let mut scanner = Scanner::new(context);
 
         assert_eq!(1, scanner.line);
 
@@ -285,7 +274,7 @@ mod tests {
     #[test]
     fn should_parse_string_literals() {
         let context = Context::new("\"literally a string\"");
-        let mut scanner = Scanner::new(context);
+        let mut scanner = Scanner::new("\"literally a string\"");
         let tokens = scanner.scan_tokens().unwrap();
 
         assert_eq!(vec![Token::new(TokenType::String, (0, 20), 1)], tokens);
@@ -294,7 +283,7 @@ mod tests {
     #[test]
     fn should_parse_number_literals() {
         let context = Context::new("13.37\n1337");
-        let mut scanner = Scanner::new(context);
+        let mut scanner = Scanner::new("13.37\n1337");
         let tokens = scanner.scan_tokens().unwrap();
 
         assert_eq!(vec![Token::new(TokenType::Number, (0, 5), 1), Token::new(TokenType::Number, (6, 10), 2)], tokens);
@@ -303,8 +292,7 @@ mod tests {
     #[test]
     fn should_parse_identifiers_and_keywords() {
         let source = "and class while foo";
-        let context = Context::new(source);
-        let mut scanner = Scanner::new(context);
+        let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens().unwrap();
         let token_types = tokens.iter()
             .map(|token| &token.token_type)
@@ -318,13 +306,12 @@ mod tests {
         ];
 
         assert_eq!(expected, token_types);
-        assert_eq!("foo", tokens.get(3).unwrap().lexeme.materialize(&scanner.context()))
+        assert_eq!("foo", tokens.get(3).unwrap().lexeme.materialize(&Context::new(source)))
     }
 
     #[test]
     fn should_store_correct_lexemes_and_lines() {
-        let context = Context::new("{<=\"foo\nbar\"");
-        let mut scanner = Scanner::new(context);
+        let mut scanner = Scanner::new("{<=\"foo\nbar\"");
         let tokens = scanner.scan_tokens().unwrap();
 
         let expected = vec![
@@ -338,8 +325,7 @@ mod tests {
 
     #[test]
     fn should_return_err_on_unknown_character() {
-        let context = Context::new("{}[");
-        let mut scanner = Scanner::new(context);
+        let mut scanner = Scanner::new("{}[");
         let tokens = scanner.scan_tokens();
         let expected = Error::FroxError(
             format!("Error occured on line 1:\n{{}}[\n  ^\n  Unexpected character: `[`").to_string(),

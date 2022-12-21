@@ -3,22 +3,22 @@ use std::fmt::Display;
 use crate::token::Lexeme;
 
 #[derive(Debug, PartialEq)]
-pub enum Expression {
-    Binary(Box<MaterializableExpression>, Box<MaterializableExpression>, BinaryOperator),
-    Grouping(Box<MaterializableExpression>),
-    Literal(LiteralValue),
-    Unary(UnaryOperator, Box<MaterializableExpression>),
+pub enum Expression<'a> {
+    Binary(Box<MaterializableExpression<'a>>, Box<MaterializableExpression<'a>>, BinaryOperator),
+    Grouping(Box<MaterializableExpression<'a>>),
+    Literal(LiteralValue<'a>),
+    Unary(UnaryOperator, Box<MaterializableExpression<'a>>),
 }
 
 #[derive(Debug, PartialEq)]
-pub struct MaterializableExpression {
-    pub expression: Expression,
+pub struct MaterializableExpression<'a> {
+    pub expression: Expression<'a>,
     pub lexeme: Lexeme
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum LiteralValue {
-    String(String),
+pub enum LiteralValue<'a> {
+    String(&'a str),
     Number(f64),
     Boolean(bool),
     Nil
@@ -44,7 +44,7 @@ pub enum BinaryOperator {
     Subtract
 }
 
-impl Display for LiteralValue {
+impl<'a> Display for LiteralValue<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LiteralValue::String(string) => f.write_str(string),
@@ -81,18 +81,18 @@ impl Display for UnaryOperator {
     }
 }
 
-impl Expression {
-    pub fn wrap_default(self) -> MaterializableExpression {
+impl<'a> Expression<'a> {
+    pub fn wrap_default(self) -> MaterializableExpression<'a> {
         MaterializableExpression::new(self, Lexeme::default())
     }
 
-    pub fn wrap(self, lexeme: Lexeme) -> MaterializableExpression {
+    pub fn wrap(self, lexeme: Lexeme) -> MaterializableExpression<'a> {
         MaterializableExpression::new(self, lexeme)
     }
 }
 
-impl MaterializableExpression {
-    pub fn new(expression: Expression, lexeme: Lexeme) -> Self {
+impl<'a> MaterializableExpression<'a> {
+    pub fn new(expression: Expression<'a>, lexeme: Lexeme) -> Self {
         MaterializableExpression { expression, lexeme }
     }
 }

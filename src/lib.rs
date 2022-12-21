@@ -14,15 +14,13 @@ use crate::parser::*;
 use crate::interpreter::*;
 
 pub fn run(source: &str) -> FroxValue {
-    let context = Context::new(source);
-
-    let mut scanner = Scanner::new(context);
+    let mut scanner = Scanner::new(source);
     let tokens = scanner.scan_tokens().expect("Error while scanning");
 
-    let mut parser = Parser::new(tokens, scanner.context());
+    let mut parser = Parser::new(tokens, source);
     let expression = parser.expression().expect("Error while parsing");
 
-    let interpreter = Interpreter::new(parser.context());
+    let interpreter = Interpreter::new(source);
     interpreter.evaluate(&expression).expect("Runtime error")
 }
 

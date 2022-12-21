@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::context::{Context, TransferContext};
+use crate::context::{Context};
 use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue, MaterializableExpression};
 use crate::expression::Expression;
 use crate::{token::*, Materializable};
@@ -25,22 +25,22 @@ impl Iterator for TokenIterator {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token>, context: Context<'a>) -> Self {
+    pub fn new(tokens: Vec<Token>, source: &'a str) -> Self {
         let token_holder = TokenIterator {
             tokens: tokens.into_iter()
         };
 
         Parser {
             token_iterator: token_holder.peekable(),
-            context
+            context: Context::new(source),
         }
     }
 
-    pub fn expression(&mut self) -> Result<MaterializableExpression> {
+    pub fn expression(&mut self) -> Result<MaterializableExpression<'a>> {
         self.equality().map_err(|error| Error::FroxError(error.format_error(self.context.source)))
     }
 
-    fn equality(&mut self) -> Result<MaterializableExpression> {
+    fn equality(&mut self) -> Result<MaterializableExpression<'a>> {
         let mut materializable_expression = self.comparison()?;
 
         loop {
@@ -61,7 +61,7 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn comparison(&mut self) -> Result<MaterializableExpression> {
+    fn comparison(&mut self) -> Result<MaterializableExpression<'a>> {
         let mut materializable_expression = self.term()?;
 
         loop {
@@ -85,7 +85,7 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn term(&mut self) -> Result<MaterializableExpression> {
+    fn term(&mut self) -> Result<MaterializableExpression<'a>> {
         let mut materializable_expression = self.factor()?;
 
         loop {
@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn factor(&mut self) -> Result<MaterializableExpression> {
+    fn factor(&mut self) -> Result<MaterializableExpression<'a>> {
         let mut materializable_expression = self.unary()?;
 
         loop {
@@ -129,7 +129,7 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn unary(&mut self) -> Result<MaterializableExpression> {
+    fn unary(&mut self) -> Result<MaterializableExpression<'a>> {
         let token_type = self.token_iterator.peek().map(|token| token.token_type);
         let operator = match token_type {
             Some(TokenType::Bang) => UnaryOperator::Not,
@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn primary(&mut self) -> Result<MaterializableExpression> {
+    fn primary(&mut self) -> Result<MaterializableExpression<'a>> {
         let materializable_expression = match self.token_iterator.peek() {
             Some(token@Token { token_type: TokenType::False, .. }) => 
                 Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(false)), token.lexeme)),
@@ -161,7 +161,7 @@ impl<'a> Parser<'a> {
                 )),
             Some(token@Token { token_type: TokenType::String, lexeme, .. }) => 
                 Ok(MaterializableExpression::new(
-                    Expression::Literal(LiteralValue::String(Self::remove_first_and_last(lexeme.materialize(&self.context)).to_string())),
+                    Expression::Literal(LiteralValue::String(&self.context.source[lexeme.start+1..lexeme.end-1])),
                     token.lexeme
                 )),
             Some(token@Token { token_type: TokenType::LeftParen, .. }) => {
@@ -209,16 +209,8 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl<'a> TransferContext for Parser<'a> {
-    fn context(&mut self) -> Context {
-        std::mem::replace(&mut self.context, Context::default())
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::context::Context;
-
     use super::*;
 
     #[test]
@@ -228,7 +220,7 @@ mod tests {
             Token::new(TokenType::EqualEqual, (1, 3), 1),
             Token::new(TokenType::Number, (3, 4), 1)
         ];
-        let mut parser = Parser::new(tokens, Context::new("1==2"));
+        let mut parser = Parser::new(tokens, "1==2");
         let expression = parser.expression().unwrap();
         assert_eq!(
             Expression::Binary(
@@ -247,11 +239,11 @@ mod tests {
             Token::new(TokenType::String, (1, 6), 1),
             Token::new(TokenType::RightParen, (6, 7), 1),
         ];
-        let mut parser = Parser::new(tokens, Context::new("(\"foo\""));
+        let mut parser = Parser::new(tokens, "(\"foo\"");
         let expression = parser.expression().unwrap();
         assert_eq!(
             Expression::Grouping(
-                Box::new(Expression::Literal(LiteralValue::String("foo".to_string())).wrap(Lexeme::new(1, 6)))
+                Box::new(Expression::Literal(LiteralValue::String("foo")).wrap(Lexeme::new(1, 6)))
             ).wrap(Lexeme::new(0, 7)),
             expression
         )
@@ -264,7 +256,7 @@ mod tests {
             Token::new(TokenType::Number, (1, 2), 1),
             Token::new(TokenType::And, (2, 3), 1)
         ];
-        let mut parser = Parser::new(tokens, Context::new("(1="));
+        let mut parser = Parser::new(tokens, "(1=");
         let expression = parser.expression();
         assert_eq!(
             "Error occured on line 0:\n(1=\n  ^\n  Expected token to be of type RightParen",

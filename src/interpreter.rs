@@ -1,4 +1,6 @@
-use crate::{context::{Context, TransferContext}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error};
+use std::str::FromStr;
+
+use crate::{context::{Context}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
@@ -14,8 +16,8 @@ pub enum FroxValue {
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(context: Context<'a>) -> Self {
-        Interpreter { context }
+    pub fn new(source: &'a str) -> Self {
+        Interpreter { context: Context::new(source) }
     }
 
     pub fn evaluate(&self, materialized_expression: &MaterializableExpression) -> Result<FroxValue> {
@@ -144,17 +146,11 @@ impl<'a> Interpreter<'a> {
     }
 }
 
-impl<'a> TransferContext for Interpreter<'a> {
-    fn context(&mut self) -> Context {
-        std::mem::replace(&mut self.context, Context::default())
-    }
-}
-
 impl<'a> FroxValue {
     fn from_literal_value(literal_value: &LiteralValue) -> Self {
         match literal_value {
             LiteralValue::Boolean(bool) => FroxValue::Boolean(*bool),
-            LiteralValue::String(string) => FroxValue::String(string.clone()),
+            LiteralValue::String(string) => FroxValue::String(String::from_str(string).unwrap()),
             LiteralValue::Number(number) => FroxValue::Number(*number),
             LiteralValue::Nil => FroxValue::Nil
         }
@@ -205,18 +201,18 @@ mod tests {
         let actual = evaluate_comparison(LiteralValue::Nil, LiteralValue::Nil, BinaryOperator::Compare);
         assert_eq!(true, actual, "Nil == Nil");
 
-        let actual = evaluate_comparison(LiteralValue::Nil, LiteralValue::String("foo".to_string()), BinaryOperator::Compare);
+        let actual = evaluate_comparison(LiteralValue::Nil, LiteralValue::String("foo"), BinaryOperator::Compare);
         assert_eq!(false, actual, "Nil == \"foo\"");
     }
 
     #[test]
     fn should_concatenate_strings() {
         let expression = Expression::Binary(
-            Box::new(Expression::Literal(LiteralValue::String("foo".to_string())).wrap_default()), 
-            Box::new(Expression::Literal(LiteralValue::String("bar".to_string())).wrap_default()),
+            Box::new(Expression::Literal(LiteralValue::String("foo")).wrap_default()), 
+            Box::new(Expression::Literal(LiteralValue::String("bar")).wrap_default()),
             BinaryOperator::Add
         ).wrap_default();
-        let interpreter = Interpreter::new(Context::new(""));
+        let interpreter = Interpreter::new("");
         let value = match interpreter.evaluate(&expression) {
             Ok(FroxValue::String(value)) => value,
             _ => panic!("{:?}", expression)
@@ -231,7 +227,7 @@ mod tests {
             Box::new(Expression::Literal(LiteralValue::Number(rhs)).wrap_default()), 
             operator
         ).wrap_default();
-        let interpreter = Interpreter::new(Context::new(""));
+        let interpreter = Interpreter::new("");
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Number(value)) => value,
             _ => panic!("{:?}", expression)
@@ -244,7 +240,7 @@ mod tests {
             Box::new(Expression::Literal(rhs).wrap_default()), 
             operator
         ).wrap_default();
-        let interpreter = Interpreter::new(Context::new(""));
+        let interpreter = Interpreter::new("");
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Boolean(value)) => value,
             _ => panic!("{:?}", expression)
