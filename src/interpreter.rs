@@ -1,7 +1,7 @@
-use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator}, error::Error};
+use crate::{context::{Context, TransferContext}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator}, error::Error};
 use crate::error::Result;
 
-struct Interpreter<'a> {
+pub struct Interpreter<'a> {
     context: Context<'a>
 }
 
@@ -136,6 +136,12 @@ impl<'a> Interpreter<'a> {
             (LiteralValue::Number(left_value), LiteralValue::Number(right_value)) => Ok((left_value, right_value)),
             (left, right) => Err(Error::InterpreterError(format!("Expected both operands to be of type number, but got ({:?}, {:?})", left, right)))
         }
+    }
+}
+
+impl<'a> TransferContext for Interpreter<'a> {
+    fn context(&mut self) -> Context {
+        std::mem::replace(&mut self.context, Context::default())
     }
 }
 
