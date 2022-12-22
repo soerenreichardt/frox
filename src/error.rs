@@ -24,7 +24,7 @@ impl Error {
             Self::ParserError(_, None) => self.to_string(),
             Self::InterpreterError(message, Some(lexeme)) => Self::pretty_print_error(source, message, lexeme),
             Self::InterpreterError(_, None) => self.to_string(),
-            Self::FroxError(_) => panic!("Cannot format error of type FroxError")
+            Self::FroxError(message) => message.to_owned()
         }
     }
 
@@ -48,7 +48,7 @@ impl Error {
         ) 
     }
 
-    fn pretty_print_error(source: &str, error_message: &str, Lexeme {start, end: _ }: &Lexeme) -> String {
+    fn pretty_print_error(source: &str, error_message: &str, Lexeme {start, end }: &Lexeme) -> String {
         println!("{}", start);
         let mut position: usize = 0;
         let lines = source.lines().collect::<Vec<_>>();
@@ -69,7 +69,13 @@ impl Error {
         let position_in_line = start - position;
         let error_line = lines[line];
         let spacing = " ".repeat(position_in_line);
-        let marker = format!("{}^", spacing);
+
+        let expression_length = end - start - 1;
+        let marker = if expression_length == 0 { 
+            format!("{}^", spacing) 
+        } else {
+            format!("{}^{}^", spacing, "-".repeat(expression_length - 1))
+        };
         let message = format!("{}{}", spacing, error_message);
         format!(
             "Error occured on line {}:\n{}\n{}\n{}",

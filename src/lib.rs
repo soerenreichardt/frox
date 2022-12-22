@@ -12,16 +12,17 @@ use crate::scanner::*;
 use crate::context::*;
 use crate::parser::*;
 use crate::interpreter::*;
+use crate::error::Result;
 
-pub fn run(source: &str) -> FroxValue {
+pub fn run(source: &str) -> Result<FroxValue> {
     let mut scanner = Scanner::new(source);
-    let tokens = scanner.scan_tokens().expect("Error while scanning");
+    let tokens = scanner.scan_tokens()?;
 
     let mut parser = Parser::new(tokens, source);
-    let expression = parser.expression().expect("Error while parsing");
+    let expression = parser.expression()?;
 
     let interpreter = Interpreter::new(source);
-    interpreter.evaluate(&expression).expect("Runtime error")
+    interpreter.evaluate(&expression)
 }
 
 pub trait Materializable<'a, T> {
@@ -35,6 +36,6 @@ mod tests {
     #[test]
     fn should_run_simple_calculation() {
         let result = run("(2 * 4) / (1 + 1)");
-        assert_eq!(FroxValue::Number(4.0), result)
+        assert_eq!(FroxValue::Number(4.0), result.unwrap())
     }
 }
