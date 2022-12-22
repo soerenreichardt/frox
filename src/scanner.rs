@@ -273,7 +273,6 @@ mod tests {
 
     #[test]
     fn should_parse_string_literals() {
-        let context = Context::new("\"literally a string\"");
         let mut scanner = Scanner::new("\"literally a string\"");
         let tokens = scanner.scan_tokens().unwrap();
 
@@ -282,7 +281,6 @@ mod tests {
 
     #[test]
     fn should_parse_number_literals() {
-        let context = Context::new("13.37\n1337");
         let mut scanner = Scanner::new("13.37\n1337");
         let tokens = scanner.scan_tokens().unwrap();
 

@@ -30,6 +30,7 @@ fn run_prompt() {
         if buffer.is_empty() {
             return;
         }
-        frox::run(&buffer);
+        let result = frox::run(&buffer);
+        println!("{:?}", result); 
     }
 }

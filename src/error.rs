@@ -9,7 +9,7 @@ pub enum Error {
     FroxError(String),
     ScannerError(String, usize, usize),
     ParserError(String, Option<Lexeme>),
-    InterpreterError(String)
+    InterpreterError(String, Option<Lexeme>)
 }
 
 pub struct ErrorCollector {
@@ -20,9 +20,10 @@ impl Error {
     pub fn format_error(&self, source: &str) -> String {
         match self {
             Self::ScannerError(message, line, position) => Self::format_scanner_error(source, message.as_str(), *line, *position),
-            Self::ParserError(message, Some(lexeme)) => Self::format_parser_error(source, message.as_str(), lexeme),
+            Self::ParserError(message, Some(lexeme)) => Self::pretty_print_error(source, message, lexeme),
             Self::ParserError(_, None) => self.to_string(),
-            Self::InterpreterError(_) => self.to_string(),
+            Self::InterpreterError(message, Some(lexeme)) => Self::pretty_print_error(source, message, lexeme),
+            Self::InterpreterError(_, None) => self.to_string(),
             Self::FroxError(_) => panic!("Cannot format error of type FroxError")
         }
     }
@@ -47,7 +48,7 @@ impl Error {
         ) 
     }
 
-    fn format_parser_error(source: &str, error_message: &str, Lexeme {start, end: _ }: &Lexeme) -> String {
+    fn pretty_print_error(source: &str, error_message: &str, Lexeme {start, end: _ }: &Lexeme) -> String {
         println!("{}", start);
         let mut position: usize = 0;
         let lines = source.lines().collect::<Vec<_>>();
@@ -123,7 +124,7 @@ impl Display for Error {
             Self::FroxError(message) => f.write_str(message),            
             Self::ScannerError(message, ..) => f.write_str(message),            
             Self::ParserError(message, ..) => f.write_str(message)   ,
-            Self::InterpreterError(message) => f.write_str(message)         
+            Self::InterpreterError(message, ..) => f.write_str(message)         
         }
     }
 }
