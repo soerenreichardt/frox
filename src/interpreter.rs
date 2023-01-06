@@ -1,6 +1,6 @@
-use std::{str::FromStr, fmt::Formatter};
+use std::{str::FromStr, fmt::{Formatter, Display}};
 
-use crate::{context::{Context}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error, token::Lexeme};
+use crate::{context::{Context}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error, token::Lexeme, statement::Statement};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
@@ -18,6 +18,25 @@ pub enum FroxValue {
 impl<'a> Interpreter<'a> {
     pub fn new(source: &'a str) -> Self {
         Interpreter { context: Context::new(source) }
+    }
+
+    pub fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, print_stream: &mut F) -> Result<()> {
+        for statement in statements {
+            self.execute(statement, print_stream).map_err(|err| self.context.collect_error(err));
+        }
+
+        self.context.flush_errors(())
+    }
+
+    fn execute<F: FnMut(String) -> ()>(&self, statement: &Statement<'a>, print_stream: &mut F) -> Result<()> {
+        match statement {
+            Statement::Expression(expression) => self.evaluate(&expression).map(|_| ()),
+            Statement::Print(expression) => {
+                let value = self.evaluate(expression)?;
+                print_stream(value.to_string());
+                Ok(())
+            }
+        }
     }
 
     pub fn evaluate(&self, MaterializableExpression { expression, lexeme }: &MaterializableExpression) -> Result<FroxValue> {
@@ -177,6 +196,12 @@ impl std::fmt::Debug for FroxValue {
             FroxValue::String(string) => f.write_str(["\"", string.as_str(), "\""].concat().as_str()),
             FroxValue::Nil => f.write_str("nil")
         }
+    }
+}
+
+impl Display for FroxValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("{:?}", self).as_str())
     }
 }
 

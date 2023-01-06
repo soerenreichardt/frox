@@ -81,6 +81,23 @@ impl Display for UnaryOperator {
     }
 }
 
+impl<'a> Display for Expression<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Binary(lhs, rhs, op) => f.write_str(format!("{} {} {}", lhs.to_string(), rhs.to_string(), op.to_string()).as_str()),
+            Self::Grouping(expression) => f.write_str(format!("({})", expression.to_string()).as_str()),
+            Self::Unary(op, expression) => f.write_str(format!("{}{}", op.to_string(), expression.to_string()).as_str()),
+            Self::Literal(literal_value) => f.write_str(literal_value.to_string().as_str())
+        }
+    }
+}
+
+impl<'a> Display for MaterializableExpression<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.expression.to_string().as_str())
+    }
+}
+
 impl<'a> Expression<'a> {
     pub fn wrap_default(self) -> MaterializableExpression<'a> {
         MaterializableExpression::new(self, Lexeme::default())

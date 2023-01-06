@@ -60,12 +60,14 @@ impl<'a> Parser<'a> {
         self.token_iterator.next();
         let value = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
+        self.token_iterator.next();
         Ok(Statement::Print(value))
     }
 
     fn expression_statement(&mut self) -> Result<Statement<'a>> {
         let expression = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
+        self.token_iterator.next();
         Ok(Statement::Expression(expression))
     }
 
@@ -230,7 +232,7 @@ impl<'a> Parser<'a> {
         match self.token_iterator.peek() {
             Some(token) if &token.token_type == expected_token_type => Ok(token),
             Some(token) => Err(Error::ParserError(format!("Expected token to be of type {:?}", expected_token_type), Some(token.lexeme))),
-            None => Err(Error::ParserError("Reached end of file while parsing".to_string(), None))
+            None => Err(Error::ParserError("Reached end of file while parsing. Maybe you are missing a ';'?".to_string(), None))
         }
     }
 }

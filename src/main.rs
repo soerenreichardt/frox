@@ -14,7 +14,10 @@ fn main() {
 fn run_file(path: &str) {
     let source = fs::read_to_string(path)
         .expect("Should have been able to read the file");
-    frox::run(&source);
+    match frox::run(&source) {
+        Ok(_) => (),
+        Err(error) => println!("{}", error),
+    }
 }
 
 fn run_prompt() {
@@ -31,7 +34,7 @@ fn run_prompt() {
             return;
         }
         match frox::run(&buffer) {
-            Ok(value) => println!("{:?}", value),
+            Ok(_) => (),
             Err(error) => println!("{}", error),
         }
     }
