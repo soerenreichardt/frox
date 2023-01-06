@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::token::Lexeme;
+use crate::{token::Lexeme};
 
 #[derive(Debug, PartialEq)]
 pub enum Expression<'a> {

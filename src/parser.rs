@@ -4,6 +4,7 @@ use std::vec::IntoIter;
 use crate::context::{Context};
 use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue, MaterializableExpression};
 use crate::expression::Expression;
+use crate::statement::Statement;
 use crate::{token::*, Materializable};
 use crate::error::*;
 
@@ -34,6 +35,38 @@ impl<'a> Parser<'a> {
             token_iterator: token_holder.peekable(),
             context: Context::new(source),
         }
+    }
+
+    pub fn parse(&mut self) -> Result<Vec<Statement<'a>>> {
+        let mut statements = Vec::new();
+        while self.token_iterator.peek().is_some() {
+            match self.statement() {
+                Ok(statement) => statements.push(statement),
+                Err(error) => self.context.collect_error(error)
+            }
+        }
+
+        self.context.flush_errors(statements)
+    }
+
+    fn statement(&mut self) -> Result<Statement<'a>> {
+        match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Print) => self.print_statement(),
+            _ => self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<Statement<'a>> {
+        self.token_iterator.next();
+        let value = self.expression()?;
+        self.consume(&TokenType::Semicolon)?;
+        Ok(Statement::Print(value))
+    }
+
+    fn expression_statement(&mut self) -> Result<Statement<'a>> {
+        let expression = self.expression()?;
+        self.consume(&TokenType::Semicolon)?;
+        Ok(Statement::Expression(expression))
     }
 
     pub fn expression(&mut self) -> Result<MaterializableExpression<'a>> {
@@ -200,13 +233,6 @@ impl<'a> Parser<'a> {
             None => Err(Error::ParserError("Reached end of file while parsing".to_string(), None))
         }
     }
-
-    fn remove_first_and_last(value: &str) -> &str {
-        let mut chars = value.chars();
-        chars.next();
-        chars.next_back();
-        chars.as_str()
-    }
 }
 
 #[cfg(test)]
@@ -261,6 +287,23 @@ mod tests {
         assert_eq!(
             "Error occured on line 0:\n(1=\n  ^\n  Expected token to be of type RightParen",
             expression.err().unwrap().to_string()
+        )
+    }
+
+    #[test]
+    fn should_parse_prin_statement() {
+        let tokens = vec![
+            Token::new(TokenType::Print, (0, 5), 1),
+            Token::new(TokenType::String, (6, 11), 1),
+            Token::new(TokenType::Semicolon, (11, 14), 1)
+        ];
+        let mut parser = Parser::new(tokens, "print \"foo\";");
+        let statement = parser.statement().unwrap();
+        assert_eq!(
+            Statement::Print(
+                Expression::Literal(LiteralValue::String("foo")).wrap(Lexeme::new(6, 11))
+            ),
+            statement
         )
     }
 }

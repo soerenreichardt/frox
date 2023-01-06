@@ -1,6 +1,7 @@
 pub mod scanner;
 pub mod token;
 pub mod expression;
+pub mod statement;
 pub mod parser;
 pub mod interpreter;
 
