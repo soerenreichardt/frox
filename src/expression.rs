@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{token::Lexeme};
+use crate::{token::{Lexeme, Token}};
 
 #[derive(Debug, PartialEq)]
 pub enum Expression<'a> {
@@ -8,6 +8,7 @@ pub enum Expression<'a> {
     Grouping(Box<MaterializableExpression<'a>>),
     Literal(LiteralValue<'a>),
     Unary(UnaryOperator, Box<MaterializableExpression<'a>>),
+    Variable(Lexeme)
 }
 
 #[derive(Debug, PartialEq)]
@@ -87,7 +88,8 @@ impl<'a> Display for Expression<'a> {
             Self::Binary(lhs, rhs, op) => f.write_str(format!("{} {} {}", lhs.to_string(), rhs.to_string(), op.to_string()).as_str()),
             Self::Grouping(expression) => f.write_str(format!("({})", expression.to_string()).as_str()),
             Self::Unary(op, expression) => f.write_str(format!("{}{}", op.to_string(), expression.to_string()).as_str()),
-            Self::Literal(literal_value) => f.write_str(literal_value.to_string().as_str())
+            Self::Literal(literal_value) => f.write_str(literal_value.to_string().as_str()),
+            Self::Variable(name) => f.write_str(format!("var {:?}", name).as_str())
         }
     }
 }

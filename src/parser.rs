@@ -40,13 +40,41 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) -> Result<Vec<Statement<'a>>> {
         let mut statements = Vec::new();
         while self.token_iterator.peek().is_some() {
-            match self.statement() {
+            match self.declaration() {
                 Ok(statement) => statements.push(statement),
                 Err(error) => self.context.collect_error(error)
             }
         }
 
         self.context.flush_errors(statements)
+    }
+
+    fn declaration(&mut self) -> Result<Statement<'a>> {
+        match self.token_iterator.peek() {
+            Some(Token { token_type: TokenType::Var, .. }) => self.variable_declaration(),
+            _ => self.statement()
+        }
+
+        // todo: synchronize
+    }
+
+    fn variable_declaration(&mut self) -> Result<Statement<'a>> {
+        self.token_iterator.next();
+        let name = self.consume(&TokenType::Identifier)?.lexeme;
+        self.token_iterator.next();
+
+        let initializer = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Equal) => {
+                self.token_iterator.next();
+                Some(self.expression()?)
+            },
+            _ => None
+        };
+
+        self.consume(&TokenType::Semicolon);
+        self.token_iterator.next();
+
+        Ok(Statement::Var(name, initializer))
     }
 
     fn statement(&mut self) -> Result<Statement<'a>> {
@@ -207,6 +235,11 @@ impl<'a> Parser<'a> {
                     token.lexeme
                 ))
             },
+            Some(token@Token { token_type: TokenType::Identifier, .. }) =>
+                Ok(MaterializableExpression::new(
+                    Expression::Variable(token.lexeme),
+                    token.lexeme
+                )),
             Some(token) => Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme))),
             None => Err(Error::ParserError("Reached end of file while parsing".to_string(), None))
         }?;
@@ -293,7 +326,7 @@ mod tests {
     }
 
     #[test]
-    fn should_parse_prin_statement() {
+    fn should_parse_print_statement() {
         let tokens = vec![
             Token::new(TokenType::Print, (0, 5), 1),
             Token::new(TokenType::String, (6, 11), 1),
@@ -306,6 +339,26 @@ mod tests {
                 Expression::Literal(LiteralValue::String("foo")).wrap(Lexeme::new(6, 11))
             ),
             statement
+        )
+    }
+
+    #[test]
+    fn should_parse_variable_declaration() {
+        let tokens = vec![
+            Token::new(TokenType::Var, (0, 3), 1),
+            Token::new(TokenType::Identifier, (4, 5), 1),
+            Token::new(TokenType::Equal, (6, 7), 1),
+            Token::new(TokenType::Number, (8, 9), 1),
+            Token::new(TokenType::Semicolon, (9, 10), 1)
+        ];
+        let mut parser = Parser::new(tokens, "var a = 1;");
+        let declaration = parser.declaration().unwrap();
+        assert_eq!(
+            Statement::Var(
+                Lexeme { start: 4, end: 5 }, 
+                Some(Expression::Literal(LiteralValue::Number(1.0)).wrap(Lexeme::new(8, 9)))
+            ),
+            declaration
         )
     }
 }

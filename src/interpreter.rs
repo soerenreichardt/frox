@@ -1,13 +1,14 @@
 use std::{str::FromStr, fmt::{Formatter, Display}};
 
-use crate::{context::{Context}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error, token::Lexeme, statement::Statement};
+use crate::{context::{Context}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error, token::Lexeme, statement::Statement, environment::Environment, Materializable};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
-    context: Context<'a>
+    context: Context<'a>,
+    environment: Environment
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum FroxValue {
     Number(f64),
     String(String),
@@ -17,7 +18,7 @@ pub enum FroxValue {
 
 impl<'a> Interpreter<'a> {
     pub fn new(source: &'a str) -> Self {
-        Interpreter { context: Context::new(source) }
+        Interpreter { context: Context::new(source), environment: Environment::new() }
     }
 
     pub fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, print_stream: &mut F) -> Result<()> {
@@ -28,12 +29,21 @@ impl<'a> Interpreter<'a> {
         self.context.flush_errors(())
     }
 
-    fn execute<F: FnMut(String) -> ()>(&self, statement: &Statement<'a>, print_stream: &mut F) -> Result<()> {
+    fn execute<F: FnMut(String) -> ()>(&mut self, statement: &Statement<'a>, print_stream: &mut F) -> Result<()> {
         match statement {
             Statement::Expression(expression) => self.evaluate(&expression).map(|_| ()),
             Statement::Print(expression) => {
                 let value = self.evaluate(expression)?;
                 print_stream(value.to_string());
+                Ok(())
+            },
+            Statement::Var(lexeme, initializer) => {
+                let initial_value = match initializer {
+                    Some(expression) => self.evaluate(expression),
+                    None => Ok(FroxValue::Nil)
+                }?;
+
+                self.environment.define(lexeme.materialize(&self.context).to_string(), initial_value);
                 Ok(())
             }
         }
@@ -66,7 +76,8 @@ impl<'a> Interpreter<'a> {
                     BinaryOperator::CompareNot => Ok(FroxValue::Boolean(!self.equals(lhs, rhs)))
                 }
             },
-            Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value))
+            Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value)),
+            Expression::Variable(lexeme) => self.environment.get(lexeme.materialize(&self.context).to_string())
         }.map_err(|error| Error::FroxError(error.format_error(self.context.source)))
     }
 
