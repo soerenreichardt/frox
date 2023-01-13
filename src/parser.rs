@@ -61,7 +61,6 @@ impl<'a> Parser<'a> {
     fn variable_declaration(&mut self) -> Result<Statement<'a>> {
         self.token_iterator.next();
         let name = self.consume(&TokenType::Identifier)?.lexeme;
-        self.token_iterator.next();
 
         let initializer = match self.token_iterator.peek().map(|token| token.token_type) {
             Some(TokenType::Equal) => {
@@ -72,7 +71,6 @@ impl<'a> Parser<'a> {
         };
 
         self.consume(&TokenType::Semicolon);
-        self.token_iterator.next();
 
         Ok(Statement::Var(name, initializer))
     }
@@ -88,7 +86,6 @@ impl<'a> Parser<'a> {
         self.token_iterator.next();
         let value = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
-        self.token_iterator.next();
         Ok(Statement::Print(value))
     }
 
@@ -256,8 +253,8 @@ impl<'a> Parser<'a> {
         Ok(Expression::Grouping(Box::new(expression)).wrap(lexeme.union(&matchig_parenthesis.lexeme)))
     }
 
-    fn consume(&mut self, expected_token_type: &TokenType) -> Result<&Token> {
-        match self.token_iterator.peek() {
+    fn consume(&mut self, expected_token_type: &TokenType) -> Result<Token> {
+        match self.token_iterator.next() {
             Some(token) if &token.token_type == expected_token_type => Ok(token),
             Some(token) => Err(Error::ParserError(format!("Expected token to be of type {:?}", expected_token_type), Some(token.lexeme))),
             None => Err(Error::ParserError("Reached end of file while parsing. Maybe you are missing a ';'?".to_string(), None))
