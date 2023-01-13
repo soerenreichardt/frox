@@ -101,6 +101,7 @@ impl<'a> Parser<'a> {
     }
 
     fn block_statement(&mut self) -> Result<Statement<'a>> {
+        self.token_iterator.next();
         let statements = self.block()?;
         Ok(Statement::Block(statements))
     }
@@ -380,6 +381,30 @@ mod tests {
                 Lexeme { start: 4, end: 5 }, 
                 Some(Expression::Literal(LiteralValue::Number(1.0)).wrap(Lexeme::new(8, 9)))
             ),
+            *statements.get(0).unwrap()
+        )
+    }
+
+    #[test]
+    fn should_parse_blocks() {
+        let tokens = vec![
+            Token::new(TokenType::LeftBrace, (0, 1), 1),
+            Token::new(TokenType::Var, (2, 5), 1),
+            Token::new(TokenType::Identifier, (6, 7), 1),
+            Token::new(TokenType::Equal, (8, 9), 1),
+            Token::new(TokenType::Number, (10, 11), 1),
+            Token::new(TokenType::Semicolon, (11, 12), 1),
+            Token::new(TokenType::RightBrace, (12, 13), 1)
+        ];
+        let mut parser = Parser::new("{ var a = 1; }");
+        let statements = parser.parse(tokens).unwrap();
+        assert_eq!(
+            Statement::Block(vec![
+                Statement::Var(
+                    Lexeme { start: 6, end: 7 },
+                    Some(Expression::Literal(LiteralValue::Number(1.0)).wrap(Lexeme::new(10, 11)))
+                )
+            ]),
             *statements.get(0).unwrap()
         )
     }
