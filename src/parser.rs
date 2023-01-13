@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::context::{Context};
+use crate::context::Context;
 use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue, MaterializableExpression};
 use crate::expression::Expression;
 use crate::statement::Statement;
@@ -100,7 +100,29 @@ impl<'a> Parser<'a> {
     }
 
     pub fn expression(&mut self) -> Result<MaterializableExpression<'a>> {
-        self.equality().map_err(|error| Error::FroxError(error.format_error(self.context.source)))
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<MaterializableExpression<'a>> {
+        let materializable_expression = self.equality()?;
+
+        let equals_token = self.token_iterator.next_if(|token| match token {
+            Token { token_type: TokenType::Equal, .. } => true,
+            _ => false
+        });
+
+        match equals_token {
+            Some(token) => {
+                let value = self.assignment()?;
+                let value_lexeme = value.lexeme;
+
+                match materializable_expression.expression {
+                    Expression::Variable(name) => Ok(Expression::Assigment(name, Box::new(value)).wrap(materializable_expression.lexeme.union(&value_lexeme))),
+                    _ => Err(Error::ParserError("Invalid assignment target".to_string(), Some(token.lexeme)))
+                }
+            }
+            None => Ok(materializable_expression)
+        }
     }
 
     fn equality(&mut self) -> Result<MaterializableExpression<'a>> {

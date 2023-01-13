@@ -4,6 +4,7 @@ use crate::{token::{Lexeme, Token}};
 
 #[derive(Debug, PartialEq)]
 pub enum Expression<'a> {
+    Assigment(Lexeme, Box<MaterializableExpression<'a>>),
     Binary(Box<MaterializableExpression<'a>>, Box<MaterializableExpression<'a>>, BinaryOperator),
     Grouping(Box<MaterializableExpression<'a>>),
     Literal(LiteralValue<'a>),
@@ -85,6 +86,7 @@ impl Display for UnaryOperator {
 impl<'a> Display for Expression<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Assigment(name, expression) => f.write_str(format!("{:?} = {}", name, expression.to_string()).as_str()),
             Self::Binary(lhs, rhs, op) => f.write_str(format!("{} {} {}", lhs.to_string(), rhs.to_string(), op.to_string()).as_str()),
             Self::Grouping(expression) => f.write_str(format!("({})", expression.to_string()).as_str()),
             Self::Unary(op, expression) => f.write_str(format!("{}{}", op.to_string(), expression.to_string()).as_str()),

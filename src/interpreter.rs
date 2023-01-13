@@ -49,7 +49,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    pub fn evaluate(&self, MaterializableExpression { expression, lexeme }: &MaterializableExpression) -> Result<FroxValue> {
+    pub fn evaluate(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression) -> Result<FroxValue> {
         match expression {
             Expression::Grouping(inner_expression) => self.evaluate(inner_expression.as_ref()),
             Expression::Unary(operator, inner_expression) => {
@@ -77,7 +77,8 @@ impl<'a> Interpreter<'a> {
                 }
             },
             Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value)),
-            Expression::Variable(lexeme) => self.environment.get(lexeme.materialize(&self.context).to_string())
+            Expression::Variable(lexeme) => self.environment.get(lexeme.materialize(&self.context).to_string(), lexeme),
+            Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme)
         }.map_err(|error| Error::FroxError(error.format_error(self.context.source)))
     }
 
@@ -143,6 +144,11 @@ impl<'a> Interpreter<'a> {
             (FroxValue::Nil, FroxValue::Nil) => true,
             _ => false
         }
+    }
+
+    fn assignment(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme) -> Result<FroxValue> {
+        let value = self.evaluate(&expression)?;
+        self.environment.assign(lexeme.materialize(&self.context).to_string(), value, lexeme)
     }
 
     fn to_boolean(&self, literal: FroxValue, lexeme: Lexeme) -> Result<bool> {
@@ -269,7 +275,7 @@ mod tests {
             Box::new(Expression::Literal(LiteralValue::String("bar")).wrap_default()),
             BinaryOperator::Add
         ).wrap_default();
-        let interpreter = Interpreter::new("");
+        let mut interpreter = Interpreter::new("");
         let value = match interpreter.evaluate(&expression) {
             Ok(FroxValue::String(value)) => value,
             _ => panic!("{:?}", expression)
@@ -284,7 +290,7 @@ mod tests {
             Box::new(Expression::Literal(LiteralValue::Number(rhs)).wrap_default()), 
             operator
         ).wrap_default();
-        let interpreter = Interpreter::new("");
+        let mut interpreter = Interpreter::new("");
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Number(value)) => value,
             _ => panic!("{:?}", expression)
@@ -297,7 +303,7 @@ mod tests {
             Box::new(Expression::Literal(rhs).wrap_default()), 
             operator
         ).wrap_default();
-        let interpreter = Interpreter::new("");
+        let mut interpreter = Interpreter::new("");
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Boolean(value)) => value,
             _ => panic!("{:?}", expression)

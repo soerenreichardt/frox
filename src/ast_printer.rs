@@ -15,7 +15,8 @@ impl AstPrinter {
             Expression::Literal(literal_value) => literal_value.to_string(),
             Expression::Unary(token_type, expression) =>
                 AstPrinter::parenthesize(token_type.to_string().as_str(), &[&expression]),
-            Expression::Variable(name) => format!("{:?}", name)
+            var@Expression::Variable(..) => format!("{}", var),
+            assignment@Expression::Assigment(..) => format!("{}", assignment)
         }
     }
 
