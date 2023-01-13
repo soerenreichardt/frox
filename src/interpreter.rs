@@ -49,6 +49,7 @@ impl<'a> Interpreter<'a> {
                 self.environment.define(lexeme.materialize(&self.context).to_string(), initial_value);
                 Ok(())
             }
+            Statement::Block(statements) => Ok(())
         }
     }
 

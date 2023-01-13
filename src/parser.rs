@@ -88,6 +88,7 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Statement<'a>> {
         match self.token_iterator.peek().map(|token| token.token_type) {
             Some(TokenType::Print) => self.print_statement(),
+            Some(TokenType::LeftBrace) => self.block_statement(),
             _ => self.expression_statement()
         }
     }
@@ -97,6 +98,24 @@ impl<'a> Parser<'a> {
         let value = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
         Ok(Statement::Print(value))
+    }
+
+    fn block_statement(&mut self) -> Result<Statement<'a>> {
+        let statements = self.block()?;
+        Ok(Statement::Block(statements))
+    }
+
+    fn block(&mut self) -> Result<Vec<Statement<'a>>> {
+        let mut statements = Vec::new();
+
+        loop {
+            match self.token_iterator.peek().map(|token| token.token_type) {
+                Some(TokenType::RightBrace) | None => break,
+                Some(_) => statements.push(self.declaration()?)
+            };
+        }
+        self.consume(&TokenType::RightBrace)?;
+        Ok(statements)
     }
 
     fn expression_statement(&mut self) -> Result<Statement<'a>> {
