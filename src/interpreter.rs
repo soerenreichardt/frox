@@ -23,7 +23,10 @@ impl<'a> Interpreter<'a> {
 
     pub fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, print_stream: &mut F) -> Result<()> {
         for statement in statements {
-            self.execute(statement, print_stream).map_err(|err| self.context.collect_error(err));
+            match self.execute(statement, print_stream) {
+                Err(error) => self.context.collect_error(error),
+                _ => ()
+            };
         }
 
         self.context.flush_errors(())

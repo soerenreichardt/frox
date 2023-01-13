@@ -17,6 +17,10 @@ use crate::context::*;
 use crate::parser::*;
 use crate::interpreter::*;
 
+struct FroxRunner {
+
+}
+
 pub fn run(source: &str) -> Result<()> {
     run_with_print_stream(source, |string| println!("{}", string))
 }
@@ -25,8 +29,8 @@ fn run_with_print_stream<F: FnMut(String) -> ()>(source: &str, mut print_stream:
     let mut scanner = Scanner::new(source);
     let tokens = scanner.scan_tokens()?;
 
-    let mut parser = Parser::new(tokens, source);
-    let statements = parser.parse()?;
+    let mut parser = Parser::new(source);
+    let statements = parser.parse(tokens)?;
 
     let mut interpreter = Interpreter::new(source);
     interpreter.interpret(&statements, &mut print_stream)

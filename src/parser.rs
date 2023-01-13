@@ -17,6 +17,12 @@ struct TokenIterator {
     tokens: IntoIter<Token>,
 }
 
+impl Default for TokenIterator {
+    fn default() -> Self {
+        Self { tokens: Vec::new().into_iter() }
+    }
+}
+
 impl Iterator for TokenIterator {
     type Item = Token;
 
@@ -26,18 +32,22 @@ impl Iterator for TokenIterator {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token>, source: &'a str) -> Self {
-        let token_holder = TokenIterator {
-            tokens: tokens.into_iter()
-        };
-
+    pub fn new(source: &'a str) -> Self {
         Parser {
-            token_iterator: token_holder.peekable(),
+            token_iterator: TokenIterator::default().peekable(),
             context: Context::new(source),
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Statement<'a>>> {
+    fn init(&mut self, tokens: Vec<Token>) {
+        let token_holder = TokenIterator {
+            tokens: tokens.into_iter()
+        };
+        self.token_iterator = token_holder.peekable();
+    }
+
+    pub fn parse(&mut self, tokens: Vec<Token>) -> Result<Vec<Statement<'a>>> {
+        self.init(tokens);
         let mut statements = Vec::new();
         while self.token_iterator.peek().is_some() {
             match self.declaration() {
@@ -70,7 +80,7 @@ impl<'a> Parser<'a> {
             _ => None
         };
 
-        self.consume(&TokenType::Semicolon);
+        self.consume(&TokenType::Semicolon)?;
 
         Ok(Statement::Var(name, initializer))
     }
@@ -271,17 +281,18 @@ mod tests {
         let tokens = vec![
             Token::new(TokenType::Number, (0, 1), 1),
             Token::new(TokenType::EqualEqual, (1, 3), 1),
-            Token::new(TokenType::Number, (3, 4), 1)
+            Token::new(TokenType::Number, (3, 4), 1),
+            Token::new(TokenType::Semicolon, (4, 5), 1)
         ];
-        let mut parser = Parser::new(tokens, "1==2");
-        let expression = parser.expression().unwrap();
+        let mut parser = Parser::new("1==2;");
+        let expression = parser.parse(tokens).unwrap();
         assert_eq!(
-            Expression::Binary(
+            Statement::Expression(Expression::Binary(
                 Box::new(Expression::Literal(LiteralValue::Number(1.0)).wrap(Lexeme::new(0, 1))), 
                 Box::new(Expression::Literal(LiteralValue::Number(2.0)).wrap(Lexeme::new(3, 4))), 
                 BinaryOperator::Compare
-            ).wrap(Lexeme::new(0, 4)),
-            expression
+            ).wrap(Lexeme::new(0, 4))),
+            *expression.get(0).unwrap()
         );
     }
 
@@ -291,14 +302,15 @@ mod tests {
             Token::new(TokenType::LeftParen, (0, 1), 1),
             Token::new(TokenType::String, (1, 6), 1),
             Token::new(TokenType::RightParen, (6, 7), 1),
+            Token::new(TokenType::Semicolon, (7, 8), 1)
         ];
-        let mut parser = Parser::new(tokens, "(\"foo\"");
-        let expression = parser.expression().unwrap();
+        let mut parser = Parser::new("(\"foo\";");
+        let expression = parser.parse(tokens).unwrap();
         assert_eq!(
-            Expression::Grouping(
+            Statement::Expression(Expression::Grouping(
                 Box::new(Expression::Literal(LiteralValue::String("foo")).wrap(Lexeme::new(1, 6)))
-            ).wrap(Lexeme::new(0, 7)),
-            expression
+            ).wrap(Lexeme::new(0, 7))),
+            *expression.get(0).unwrap()
         )
     }
 
@@ -309,8 +321,8 @@ mod tests {
             Token::new(TokenType::Number, (1, 2), 1),
             Token::new(TokenType::And, (2, 3), 1)
         ];
-        let mut parser = Parser::new(tokens, "(1=");
-        let expression = parser.parse();
+        let mut parser = Parser::new("(1=");
+        let expression = parser.parse(tokens);
         assert!(
             expression.err().unwrap().to_string().contains("Error occured on line 0:\n(1=\n  ^\n  Expected token to be of type RightParen")
         )
@@ -323,13 +335,13 @@ mod tests {
             Token::new(TokenType::String, (6, 11), 1),
             Token::new(TokenType::Semicolon, (11, 14), 1)
         ];
-        let mut parser = Parser::new(tokens, "print \"foo\";");
-        let statement = parser.statement().unwrap();
+        let mut parser = Parser::new("print \"foo\";");
+        let statement = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Print(
                 Expression::Literal(LiteralValue::String("foo")).wrap(Lexeme::new(6, 11))
             ),
-            statement
+            *statement.get(0).unwrap()
         )
     }
 
@@ -342,14 +354,14 @@ mod tests {
             Token::new(TokenType::Number, (8, 9), 1),
             Token::new(TokenType::Semicolon, (9, 10), 1)
         ];
-        let mut parser = Parser::new(tokens, "var a = 1;");
-        let declaration = parser.declaration().unwrap();
+        let mut parser = Parser::new("var a = 1;");
+        let statements = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Var(
                 Lexeme { start: 4, end: 5 }, 
                 Some(Expression::Literal(LiteralValue::Number(1.0)).wrap(Lexeme::new(8, 9)))
             ),
-            declaration
+            *statements.get(0).unwrap()
         )
     }
 }
