@@ -1,11 +1,11 @@
 use std::{str::FromStr, fmt::{Formatter, Display}};
 
-use crate::{context::{Context}, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error, token::Lexeme, statement::Statement, environment::Environment, Materializable};
+use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
     context: Context<'a>,
-    environment: Environment
+    environment: &'a mut Environment
 }
 
 #[derive(PartialEq, Clone)]
@@ -17,8 +17,8 @@ pub enum FroxValue {
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(source: &'a str) -> Self {
-        Interpreter { context: Context::new(source), environment: Environment::new() }
+    pub fn new(source: &'a str, environment: &'a mut Environment) -> Self {
+        Interpreter { context: Context::new(source), environment }
     }
 
     pub fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, print_stream: &mut F) -> Result<()> {
@@ -278,7 +278,8 @@ mod tests {
             Box::new(Expression::Literal(LiteralValue::String("bar")).wrap_default()),
             BinaryOperator::Add
         ).wrap_default();
-        let mut interpreter = Interpreter::new("");
+        let mut environment = Environment::new();
+        let mut interpreter = Interpreter::new("", &mut environment);
         let value = match interpreter.evaluate(&expression) {
             Ok(FroxValue::String(value)) => value,
             _ => panic!("{:?}", expression)
@@ -293,7 +294,8 @@ mod tests {
             Box::new(Expression::Literal(LiteralValue::Number(rhs)).wrap_default()), 
             operator
         ).wrap_default();
-        let mut interpreter = Interpreter::new("");
+        let mut environment = Environment::new();
+        let mut interpreter = Interpreter::new("", &mut environment);
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Number(value)) => value,
             _ => panic!("{:?}", expression)
@@ -306,7 +308,8 @@ mod tests {
             Box::new(Expression::Literal(rhs).wrap_default()), 
             operator
         ).wrap_default();
-        let mut interpreter = Interpreter::new("");
+        let mut environment = Environment::new();
+        let mut interpreter = Interpreter::new("", &mut environment);
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Boolean(value)) => value,
             _ => panic!("{:?}", expression)
