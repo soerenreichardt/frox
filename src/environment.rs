@@ -6,6 +6,7 @@ use crate::interpreter::FroxValue;
 use crate::token::Lexeme;
 
 
+#[derive(Clone)]
 pub struct Environment {
     values: HashMap<String, FroxValue>,
     parent: Option<Box<Environment>>
@@ -17,8 +18,8 @@ impl Environment {
         Environment { values: HashMap::new(), parent: None }
     }
 
-    pub fn new_inner(environment: Environment) -> Self {
-        Environment { values: HashMap::new(), parent: Some(Box::new(environment)) }
+    pub fn new_inner(environment: Box<Environment>) -> Self {
+        Environment { values: HashMap::new(), parent: Some(environment) }
     }
 
     pub fn define(&mut self, name: String, value: FroxValue) {

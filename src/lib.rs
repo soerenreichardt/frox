@@ -38,7 +38,7 @@ impl FroxRunner {
         let mut parser = Parser::new(source);
         let statements = parser.parse(tokens)?;
     
-        let mut interpreter = Interpreter::new(source, &mut self.environment);
+        let mut interpreter = Interpreter::new(source, self.environment.clone());
         interpreter.interpret(&statements, &mut print_stream)
     }
 }
