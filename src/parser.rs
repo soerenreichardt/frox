@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Expression(expression))
     }
 
-    pub fn expression(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn expression(&mut self) -> Result<MaterializableExpression<'a>> {
         self.assignment()
     }
 
@@ -232,55 +232,28 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<MaterializableExpression<'a>> {
-        let materializable_expression = match self.token_iterator.peek() {
-            Some(token@Token { token_type: TokenType::False, .. }) => 
-                Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(false)), token.lexeme)),
-            Some(token@Token { token_type: TokenType::True, .. }) =>
-                Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Boolean(true)), token.lexeme)),
-            Some(token@Token { token_type: TokenType::Nil, .. }) => 
-                Ok(MaterializableExpression::new(Expression::Literal(LiteralValue::Nil), token.lexeme)),
-            Some(token@Token { token_type: TokenType::Number, lexeme, .. }) => 
-                Ok(MaterializableExpression::new(
-                    Expression::Literal(LiteralValue::Number(lexeme.materialize(&self.context).parse::<f64>().unwrap())),
-                    token.lexeme
-                )),
-            Some(token@Token { token_type: TokenType::String, lexeme, .. }) => 
-                Ok(MaterializableExpression::new(
-                    Expression::Literal(LiteralValue::String(&self.context.source[lexeme.start+1..lexeme.end-1])),
-                    token.lexeme
-                )),
-            Some(token@Token { token_type: TokenType::LeftParen, .. }) => {
-                Ok(MaterializableExpression::new(
-                    // This expression is a dummy as the correct inner expression will be
-                    // evaluated after this match block.
-                    Expression::Grouping(Box::new(MaterializableExpression::new(Expression::Literal(LiteralValue::Nil), token.lexeme))),
-                    token.lexeme
-                ))
+        match self.token_iterator.next() {
+            Some (token) => {
+                let expression = match token.token_type {
+                    TokenType::False => Expression::Literal(LiteralValue::Boolean(false)).wrap(token.lexeme),
+                    TokenType::True => Expression::Literal(LiteralValue::Boolean(true)).wrap(token.lexeme),
+                    TokenType::Nil => Expression::Literal(LiteralValue::Nil).wrap(token.lexeme),
+                    TokenType::Number => Expression::Literal(LiteralValue::Number(token.lexeme.materialize(&self.context).parse::<f64>().unwrap())).wrap(token.lexeme),
+                    TokenType::String => Expression::Literal(LiteralValue::String(&self.context.source[token.lexeme.start+1..token.lexeme.end-1])).wrap(token.lexeme),
+                    TokenType::LeftParen => self.grouping_expression(&token.lexeme)?,
+                    TokenType::Identifier => Expression::Variable(token.lexeme).wrap(token.lexeme),
+                    _ => return Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme)))
+                };
+                Ok(expression)
             },
-            Some(token@Token { token_type: TokenType::Identifier, .. }) =>
-                Ok(MaterializableExpression::new(
-                    Expression::Variable(token.lexeme),
-                    token.lexeme
-                )),
-            Some(token) => Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme))),
             None => Err(Error::ParserError("Reached end of file while parsing".to_string(), None))
-        }?;
-        
-        let materializable_expression = match materializable_expression {
-            MaterializableExpression { expression: Expression::Grouping(_), lexeme } => {
-                self.token_iterator.next();
-                let materializable_expression = self.expression()?;
-                let found_parenthesis = self.consume(&TokenType::RightParen)?;
-                MaterializableExpression::new(
-                    Expression::Grouping(Box::new(materializable_expression)),
-                    lexeme.union(&found_parenthesis.lexeme)
-                )
-            }
-            expr => expr
-        };
+        }
+    }
 
-        self.token_iterator.next();
-        Ok(materializable_expression)
+    fn grouping_expression(&mut self, lexeme: &Lexeme) -> Result<MaterializableExpression<'a>> {
+        let expression = self.expression()?;
+        let matchig_parenthesis = self.consume(&TokenType::RightParen)?;
+        Ok(Expression::Grouping(Box::new(expression)).wrap(lexeme.union(&matchig_parenthesis.lexeme)))
     }
 
     fn consume(&mut self, expected_token_type: &TokenType) -> Result<&Token> {
@@ -340,10 +313,9 @@ mod tests {
             Token::new(TokenType::And, (2, 3), 1)
         ];
         let mut parser = Parser::new(tokens, "(1=");
-        let expression = parser.expression();
-        assert_eq!(
-            "Error occured on line 0:\n(1=\n  ^\n  Expected token to be of type RightParen",
-            expression.err().unwrap().to_string()
+        let expression = parser.parse();
+        assert!(
+            expression.err().unwrap().to_string().contains("Error occured on line 0:\n(1=\n  ^\n  Expected token to be of type RightParen")
         )
     }
 
