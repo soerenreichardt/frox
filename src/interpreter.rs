@@ -49,7 +49,8 @@ impl<'a> Interpreter<'a> {
                 self.environment.borrow_mut().define(lexeme.materialize(&self.context).to_string(), initial_value);
                 Ok(())
             }
-            Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(self.environment.clone()).into(), print_stream)
+            Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(self.environment.clone()).into(), print_stream),
+            Statement::If(condition, then_branch, else_branch) => self.execute_condition(condition, then_branch, else_branch, print_stream),
         }
     }
 
@@ -64,6 +65,20 @@ impl<'a> Interpreter<'a> {
         let execution_result = execute_statements();
         self.environment = previous_environment;
         execution_result
+    }
+
+    fn execute_condition<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, then_branch: &Box<Statement<'a>>, else_branch: &Option<Box<Statement<'a>>>, print_stream: &mut F) -> Result<()> {
+        let evaluated_condition = self.evaluate(condition)?;
+        if self.to_boolean(evaluated_condition, condition.lexeme)? {
+            return self.execute(&then_branch, print_stream);
+        } 
+        match else_branch {
+            Some(statement) => self.execute(&statement, print_stream),
+            None => {
+                print_stream(FroxValue::Nil.to_string());
+                Ok(())
+            }
+        }
     }
 
     pub fn evaluate(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression) -> Result<FroxValue> {

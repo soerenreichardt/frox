@@ -87,10 +87,33 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<Statement<'a>> {
         match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::If) => self.if_statement(),
             Some(TokenType::Print) => self.print_statement(),
             Some(TokenType::LeftBrace) => self.block_statement(),
             _ => self.expression_statement()
         }
+    }
+
+    fn if_statement(&mut self) -> Result<Statement<'a>> {
+        self.token_iterator.next();
+        self.consume(&TokenType::LeftParen)?;
+        let condition = self.expression()?;
+        self.consume(&TokenType::RightParen)?;
+
+        let then_branch = self.statement()?;
+        let else_branch = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Else) => {
+                self.token_iterator.next();
+                Some(self.statement()?)
+            },
+            _ => None
+        };
+        
+        Ok(Statement::If(
+            condition,
+            Box::new(then_branch),
+            else_branch.map(Box::new)
+        ))
     }
 
     fn print_statement(&mut self) -> Result<Statement<'a>> {
