@@ -1,11 +1,11 @@
-use std::{str::FromStr, fmt::{Formatter, Display}};
+use std::{str::FromStr, fmt::{Formatter, Display}, rc::Rc, cell::RefCell};
 
 use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
     context: Context<'a>,
-    environment: Environment
+    environment: Rc<RefCell<Environment>>
 }
 
 #[derive(PartialEq, Clone)]
@@ -17,7 +17,7 @@ pub enum FroxValue {
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(source: &'a str, environment: Environment) -> Self {
+    pub fn new(source: &'a str, environment: Rc<RefCell<Environment>>) -> Self {
         Interpreter { context: Context::new(source), environment }
     }
 
@@ -46,14 +46,14 @@ impl<'a> Interpreter<'a> {
                     None => Ok(FroxValue::Nil)
                 }?;
 
-                self.environment.define(lexeme.materialize(&self.context).to_string(), initial_value);
+                self.environment.borrow_mut().define(lexeme.materialize(&self.context).to_string(), initial_value);
                 Ok(())
             }
-            Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(Box::new(self.environment.clone())), print_stream)
+            Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(self.environment.clone()).into(), print_stream)
         }
     }
 
-    fn execute_block<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, nested_ennvironment: Environment, print_stream: &mut F) -> Result<()> {
+    fn execute_block<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, nested_ennvironment: Rc<RefCell<Environment>>, print_stream: &mut F) -> Result<()> {
         let previous_environment = std::mem::replace(&mut self.environment, nested_ennvironment);
         let mut execute_statements = || -> Result<()> {
             for statement in statements {
@@ -94,7 +94,7 @@ impl<'a> Interpreter<'a> {
                 }
             },
             Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value)),
-            Expression::Variable(lexeme) => self.environment.get(lexeme.materialize(&self.context).to_string(), lexeme),
+            Expression::Variable(lexeme) => self.environment.borrow().get(lexeme.materialize(&self.context).to_string(), lexeme),
             Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme)
         }.map_err(|error| Error::FroxError(error.format_error(self.context.source)))
     }
@@ -165,7 +165,7 @@ impl<'a> Interpreter<'a> {
 
     fn assignment(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme) -> Result<FroxValue> {
         let value = self.evaluate(&expression)?;
-        self.environment.assign(lexeme.materialize(&self.context).to_string(), value, lexeme)
+        self.environment.borrow_mut().assign(lexeme.materialize(&self.context).to_string(), value, lexeme)
     }
 
     fn to_boolean(&self, literal: FroxValue, lexeme: Lexeme) -> Result<bool> {
@@ -293,7 +293,7 @@ mod tests {
             BinaryOperator::Add
         ).wrap_default();
         let mut environment = Environment::new();
-        let mut interpreter = Interpreter::new("", environment);
+        let mut interpreter = Interpreter::new("", environment.into());
         let value = match interpreter.evaluate(&expression) {
             Ok(FroxValue::String(value)) => value,
             _ => panic!("{:?}", expression)
@@ -309,7 +309,7 @@ mod tests {
             operator
         ).wrap_default();
         let mut environment = Environment::new();
-        let mut interpreter = Interpreter::new("", environment);
+        let mut interpreter = Interpreter::new("", environment.into());
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Number(value)) => value,
             _ => panic!("{:?}", expression)
@@ -323,7 +323,7 @@ mod tests {
             operator
         ).wrap_default();
         let mut environment = Environment::new();
-        let mut interpreter = Interpreter::new("", environment);
+        let mut interpreter = Interpreter::new("", environment.into());
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Boolean(value)) => value,
             _ => panic!("{:?}", expression)

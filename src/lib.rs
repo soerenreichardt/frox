@@ -10,6 +10,9 @@ mod error;
 mod context;
 mod environment;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use environment::Environment;
 use error::Result;
 
@@ -19,12 +22,12 @@ use crate::parser::*;
 use crate::interpreter::*;
 
 pub struct FroxRunner {
-    environment: Environment
+    environment: Rc<RefCell<Environment>>
 }
 
 impl FroxRunner {
     pub fn new() -> Self {
-        FroxRunner { environment: Environment::new() }
+        FroxRunner { environment: Environment::new().into() }
     }
 
     pub fn run(&mut self, source: &str) -> Result<()> {
