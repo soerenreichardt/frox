@@ -57,7 +57,14 @@ mod tests {
     #[test]
     fn should_run_simple_calculation() {
         let mut buffer = "".to_string();
-        FroxRunner::new().run_with_print_stream("print (2 * 4) / (1 + 1);",  |string| buffer = string);
+        FroxRunner::new().run_with_print_stream("print (2 * 4) / (1 + 1);",  |string| buffer = string).unwrap();
         assert_eq!(FroxValue::Number(4.0).to_string(), buffer)
+    }
+
+    #[test]
+    fn should_execute_if_statement() {
+        let mut buffer = "".to_string();
+        FroxRunner::new().run_with_print_stream("if (1>2) print 1; else print 2;", |string| buffer = string).unwrap();
+        assert_eq!("2", buffer)
     }
 }

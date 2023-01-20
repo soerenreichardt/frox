@@ -307,7 +307,7 @@ mod tests {
             Box::new(Expression::Literal(LiteralValue::String("bar")).wrap_default()),
             BinaryOperator::Add
         ).wrap_default();
-        let mut environment = Environment::new();
+        let environment = Environment::new();
         let mut interpreter = Interpreter::new("", environment.into());
         let value = match interpreter.evaluate(&expression) {
             Ok(FroxValue::String(value)) => value,
@@ -323,7 +323,7 @@ mod tests {
             Box::new(Expression::Literal(LiteralValue::Number(rhs)).wrap_default()), 
             operator
         ).wrap_default();
-        let mut environment = Environment::new();
+        let environment = Environment::new();
         let mut interpreter = Interpreter::new("", environment.into());
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Number(value)) => value,
@@ -337,7 +337,7 @@ mod tests {
             Box::new(Expression::Literal(rhs).wrap_default()), 
             operator
         ).wrap_default();
-        let mut environment = Environment::new();
+        let environment = Environment::new();
         let mut interpreter = Interpreter::new("", environment.into());
         match interpreter.evaluate(&expression) {
             Ok(FroxValue::Boolean(value)) => value,
