@@ -452,4 +452,25 @@ mod tests {
             *statements.get(0).unwrap()
         )
     }
+    #[test]
+    fn should_parse_logical_expression() {
+        let tokens = vec![
+            Token::new(TokenType::True, (0, 4), 1),
+            Token::new(TokenType::Or, (5, 7), 1),
+            Token::new(TokenType::True, (8, 11), 1),
+            Token::new(TokenType::Semicolon, (11, 11), 1)
+        ];
+        let mut parser = Parser::new("true or true");
+        let statements = parser.parse(tokens).unwrap();
+        assert_eq!(
+            Statement::Expression(
+                Expression::Logical(
+                    Box::new(Expression::Literal(LiteralValue::Boolean(true)).wrap(Lexeme::new(0, 4))), 
+                    Box::new(Expression::Literal(LiteralValue::Boolean(true)).wrap(Lexeme::new(8, 11))), 
+                    LogicalOperator::Or
+                ).wrap(Lexeme::new(0, 11))
+            ),
+            *statements.get(0).unwrap()
+        )
+    }
 }
