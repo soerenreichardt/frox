@@ -87,12 +87,58 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<Statement<'a>> {
         match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::For) => self.for_statement(),
             Some(TokenType::If) => self.if_statement(),
             Some(TokenType::Print) => self.print_statement(),
             Some(TokenType::While) => self.while_statement(),
             Some(TokenType::LeftBrace) => self.block_statement(),
             _ => self.expression_statement()
         }
+    }
+
+    fn for_statement(&mut self) -> Result<Statement<'a>> {
+        self.token_iterator.next();
+        self.consume(&TokenType::LeftParen)?;
+
+        let initializer = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Semicolon) => None,
+            Some(TokenType::Var) => Some(self.variable_declaration()?),
+            _ => Some(self.expression_statement()?)
+        };
+
+        if initializer.is_none() { self.consume(&TokenType::Semicolon)?; }
+
+        let condition = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Semicolon) => None,
+            _ => Some(self.expression()?)
+        };
+
+        self.consume(&TokenType::Semicolon)?;
+
+        let increment = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::RightParen) => None,
+            _ => Some(self.expression()?)
+        };
+
+        self.consume(&TokenType::RightParen)?;
+
+        let mut body = self.statement()?;
+
+        if let Some(increment) = increment {
+            body = Statement::Block( vec![ body, Statement::Expression(increment) ] )
+        };
+
+        let condition = match condition {
+            Some(condition) => condition,
+            None => Expression::Literal(LiteralValue::Boolean(true)).wrap(Lexeme::new(0, 0))
+        };
+        body = Statement::While(condition, Box::new(body));
+    
+        if let Some(initializer) = initializer {
+            body = Statement::Block(vec![initializer, body]);
+        }
+
+        Ok(body)
     }
 
     fn if_statement(&mut self) -> Result<Statement<'a>> {

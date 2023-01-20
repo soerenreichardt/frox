@@ -66,4 +66,11 @@ mod tests {
         FroxRunner::new().run_with_print_stream("if (1>2) print 1; else print 2;", |string| buffer = string).unwrap();
         assert_eq!("2", buffer)
     }
+
+    #[test]
+    fn should_execute_for_loops() {
+        let mut buffer = "".to_string();
+        FroxRunner::new().run_with_print_stream("for (var i=0; i<3; i = i + 1) { print i; }", |string| buffer.push_str(string.as_str())).unwrap();
+        assert_eq!("012", buffer);
+    }
 }

@@ -69,8 +69,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn execute_condition<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, then_branch: &Box<Statement<'a>>, else_branch: &Option<Box<Statement<'a>>>, print_stream: &mut F) -> Result<()> {
-        let evaluated_condition = self.evaluate(condition)?;
-        if self.to_boolean(evaluated_condition, condition.lexeme)? {
+        if Self::to_boolean(self.evaluate(condition)?, condition.lexeme)? {
             return self.execute(&then_branch, print_stream);
         } 
         match else_branch {
@@ -83,8 +82,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn execute_while_loop<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, body: &Box<Statement<'a>>, print_stream: &mut F) -> Result<()> {
-        let evaluated_condition = self.evaluate(condition)?;
-        while self.to_boolean(evaluated_condition.clone(), condition.lexeme)? {
+        while Self::to_boolean(self.evaluate(condition)?, condition.lexeme)? {
             self.execute(body, print_stream)?;
         }
         Ok(())
@@ -132,7 +130,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn not(&self, literal: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        self.to_boolean(literal, lexeme).map(|bool| FroxValue::Boolean(bool))
+        Self::to_boolean(literal, lexeme).map(|bool| FroxValue::Boolean(bool))
     }
 
     fn subtract(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
@@ -196,7 +194,7 @@ impl<'a> Interpreter<'a> {
     fn logical(&mut self, lhs: &MaterializableExpression, rhs: &MaterializableExpression, operator: &LogicalOperator) -> Result<FroxValue> {
         let left = self.evaluate(lhs)?;
 
-        let boolean_value = self.to_boolean(left.clone(), lhs.lexeme)?;
+        let boolean_value = Self::to_boolean(left.clone(), lhs.lexeme)?;
         let return_left = match operator {
             LogicalOperator::Or => boolean_value,
             LogicalOperator::And => !boolean_value
@@ -208,7 +206,7 @@ impl<'a> Interpreter<'a> {
         self.evaluate(rhs)
     }
 
-    fn to_boolean(&self, literal: FroxValue, lexeme: Lexeme) -> Result<bool> {
+    fn to_boolean(literal: FroxValue, lexeme: Lexeme) -> Result<bool> {
         match literal {
             FroxValue::Boolean(bool) => Ok(bool),
             FroxValue::Nil => Ok(false),
