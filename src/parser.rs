@@ -89,6 +89,7 @@ impl<'a> Parser<'a> {
         match self.token_iterator.peek().map(|token| token.token_type) {
             Some(TokenType::If) => self.if_statement(),
             Some(TokenType::Print) => self.print_statement(),
+            Some(TokenType::While) => self.while_statement(),
             Some(TokenType::LeftBrace) => self.block_statement(),
             _ => self.expression_statement()
         }
@@ -121,6 +122,16 @@ impl<'a> Parser<'a> {
         let value = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
         Ok(Statement::Print(value))
+    }
+
+    fn while_statement(&mut self) -> Result<Statement<'a>> {
+        self.token_iterator.next();
+        self.consume(&TokenType::LeftParen)?;
+        let condition = self.expression()?;
+        self.consume(&TokenType::RightParen)?;
+        let body = self.statement()?;
+
+        Ok(Statement::While(condition, Box::new(body)))
     }
 
     fn block_statement(&mut self) -> Result<Statement<'a>> {

@@ -51,6 +51,7 @@ impl<'a> Interpreter<'a> {
             }
             Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(self.environment.clone()).into(), print_stream),
             Statement::If(condition, then_branch, else_branch) => self.execute_condition(condition, then_branch, else_branch, print_stream),
+            Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream)
         }
     }
 
@@ -79,6 +80,14 @@ impl<'a> Interpreter<'a> {
                 Ok(())
             }
         }
+    }
+
+    fn execute_while_loop<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, body: &Box<Statement<'a>>, print_stream: &mut F) -> Result<()> {
+        let evaluated_condition = self.evaluate(condition)?;
+        while self.to_boolean(evaluated_condition.clone(), condition.lexeme)? {
+            self.execute(body, print_stream)?;
+        }
+        Ok(())
     }
 
     pub fn evaluate(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression) -> Result<FroxValue> {
