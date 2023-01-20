@@ -1,6 +1,6 @@
 use std::{str::FromStr, fmt::{Formatter, Display}, rc::Rc, cell::RefCell};
 
-use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable};
+use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
@@ -110,7 +110,8 @@ impl<'a> Interpreter<'a> {
             },
             Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value)),
             Expression::Variable(lexeme) => self.environment.borrow().get(lexeme.materialize(&self.context).to_string(), lexeme),
-            Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme)
+            Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme),
+            Expression::Logical(left, right, operator) => self.logical(left, right, operator) 
         }.map_err(|error| Error::FroxError(error.format_error(self.context.source)))
     }
 
@@ -181,6 +182,21 @@ impl<'a> Interpreter<'a> {
     fn assignment(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme) -> Result<FroxValue> {
         let value = self.evaluate(&expression)?;
         self.environment.borrow_mut().assign(lexeme.materialize(&self.context).to_string(), value, lexeme)
+    }
+
+    fn logical(&mut self, lhs: &MaterializableExpression, rhs: &MaterializableExpression, operator: &LogicalOperator) -> Result<FroxValue> {
+        let left = self.evaluate(lhs)?;
+
+        let boolean_value = self.to_boolean(left.clone(), lhs.lexeme)?;
+        let return_left = match operator {
+            LogicalOperator::Or => boolean_value,
+            LogicalOperator::And => !boolean_value
+        };
+
+        if return_left {
+            return Ok(left.clone());
+        }
+        self.evaluate(rhs)
     }
 
     fn to_boolean(&self, literal: FroxValue, lexeme: Lexeme) -> Result<bool> {

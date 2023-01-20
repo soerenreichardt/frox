@@ -5,7 +5,6 @@ pub mod statement;
 pub mod parser;
 pub mod interpreter;
 
-mod ast_printer;
 mod error;
 mod context;
 mod environment;

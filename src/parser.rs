@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::vec::IntoIter;
 
 use crate::context::Context;
-use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue, MaterializableExpression};
+use crate::expression::{BinaryOperator, UnaryOperator, LiteralValue, MaterializableExpression, LogicalOperator};
 use crate::expression::Expression;
 use crate::statement::Statement;
 use crate::{token::*, Materializable};
@@ -154,7 +154,7 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> Result<MaterializableExpression<'a>> {
-        let materializable_expression = self.equality()?;
+        let materializable_expression = self.logical()?;
 
         let equals_token = self.token_iterator.next_if(|token| match token {
             Token { token_type: TokenType::Equal, .. } => true,
@@ -173,6 +173,27 @@ impl<'a> Parser<'a> {
             }
             None => Ok(materializable_expression)
         }
+    }
+
+    fn logical(&mut self) -> Result<MaterializableExpression<'a>> {
+        let expression = self.equality()?;
+
+        let logical_operator = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Or) => Some(LogicalOperator::Or),
+            Some(TokenType::And) => Some(LogicalOperator::And),
+            _ => None
+        };
+
+        if let Some(logical_operator) = logical_operator {
+            self.token_iterator.next();
+            let rhs = self.logical()?;
+            let union_lexeme = expression.lexeme.union(&rhs.lexeme);
+            return Ok(MaterializableExpression::new(
+                Expression::Logical(Box::new(expression), Box::new(rhs), logical_operator), 
+                union_lexeme
+            ))
+        }
+        Ok(expression)
     }
 
     fn equality(&mut self) -> Result<MaterializableExpression<'a>> {

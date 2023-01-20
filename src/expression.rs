@@ -8,6 +8,7 @@ pub enum Expression<'a> {
     Binary(Box<MaterializableExpression<'a>>, Box<MaterializableExpression<'a>>, BinaryOperator),
     Grouping(Box<MaterializableExpression<'a>>),
     Literal(LiteralValue<'a>),
+    Logical(Box<MaterializableExpression<'a>>, Box<MaterializableExpression<'a>>, LogicalOperator),
     Unary(UnaryOperator, Box<MaterializableExpression<'a>>),
     Variable(Lexeme)
 }
@@ -44,6 +45,12 @@ pub enum BinaryOperator {
     LessThanOrEqual,
     Add,
     Subtract
+}
+
+#[derive(Debug, PartialEq)]
+pub enum LogicalOperator {
+    And,
+    Or
 }
 
 impl<'a> Display for LiteralValue<'a> {
@@ -83,6 +90,15 @@ impl Display for UnaryOperator {
     }
 }
 
+impl Display for LogicalOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::And => f.write_str("and"),
+            Self::Or => f.write_str("or")
+        }
+    }
+}
+
 impl<'a> Display for Expression<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -91,6 +107,7 @@ impl<'a> Display for Expression<'a> {
             Self::Grouping(expression) => f.write_str(format!("({})", expression.to_string()).as_str()),
             Self::Unary(op, expression) => f.write_str(format!("{}{}", op.to_string(), expression.to_string()).as_str()),
             Self::Literal(literal_value) => f.write_str(literal_value.to_string().as_str()),
+            Self::Logical(lhs, rhs, op) => f.write_str(format!("{} {} {}", lhs.to_string(), rhs.to_string(), op.to_string()).as_str()),
             Self::Variable(name) => f.write_str(format!("var {:?}", name).as_str())
         }
     }
