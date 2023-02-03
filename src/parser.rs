@@ -347,7 +347,7 @@ impl<'a> Parser<'a> {
         let operator = match token_type {
             Some(TokenType::Bang) => UnaryOperator::Not,
             Some(TokenType::Minus) => UnaryOperator::Minus,
-            _ => return self.primary()
+            _ => return self.call()
         };
 
         self.token_iterator.next();
@@ -356,6 +356,48 @@ impl<'a> Parser<'a> {
         Ok(MaterializableExpression::new(
             Expression::Unary(operator, Box::new(materializable_expression)),
             lexeme
+        ))
+    }
+
+    fn call(&mut self) -> Result<MaterializableExpression<'a>> {
+        let mut expression = self.primary()?;
+
+        loop {
+            match self.token_iterator.peek().map(|token| token.token_type) {
+                Some(TokenType::LeftParen) => expression = self.finish_call(expression)?,
+                _ => break
+            }
+        }
+
+        Ok(expression)
+    }
+
+    fn finish_call(&mut self, callee: MaterializableExpression<'a>) -> Result<MaterializableExpression<'a>> {
+        self.token_iterator.next();
+        let mut arguments = Vec::new();
+
+        loop {
+            match self.token_iterator.peek().map(|token| token.token_type) {
+                Some(TokenType::RightParen) => {
+                    break
+                },
+                Some(TokenType::Comma) => {
+                    self.token_iterator.next();
+                    continue
+                },
+                Some(_) => arguments.push(Box::new(self.expression()?)),
+                None => break
+            }
+            if arguments.len() > 256 {
+                return Err(Error::ParserError("Can't have more than 255 arguments".to_string(), None))
+            }
+        }
+
+        let closing_parenthesis = self.consume(&TokenType::RightParen)?;
+        let union_lexeme = callee.lexeme.union(&closing_parenthesis.lexeme);
+        Ok(MaterializableExpression::new(
+            Expression::Call(Box::new(callee), closing_parenthesis.lexeme, arguments),
+            union_lexeme
         ))
     }
 
@@ -526,6 +568,56 @@ mod tests {
                     Box::new(Expression::Literal(LiteralValue::Boolean(true)).wrap(Lexeme::new(8, 11))), 
                     LogicalOperator::Or
                 ).wrap(Lexeme::new(0, 11))
+            ),
+            *statements.get(0).unwrap()
+        )
+    }
+
+    #[test]
+    fn should_parse_function_call() {
+        let tokens = vec![
+            Token::new(TokenType::Identifier, (0, 3), 1),
+            Token::new(TokenType::LeftParen, (3, 4), 1),
+            Token::new(TokenType::RightParen, (4, 5), 1),
+            Token::new(TokenType::Semicolon, (5, 6), 1)
+        ];
+        let mut parser = Parser::new("foo();");
+        let statements = parser.parse(tokens).unwrap();
+        assert_eq!(
+            Statement::Expression(
+                Expression::Call(
+                    Box::new(Expression::Variable(Lexeme::new(0, 3)).wrap(Lexeme::new(0, 3))), 
+                    Lexeme::new(4, 5), 
+                    Vec::new()
+                ).wrap(Lexeme::new(0, 5))
+            ),
+            *statements.get(0).unwrap()
+        )
+    }
+
+    #[test]
+    fn should_parse_function_call_with_params() {
+        let tokens = vec![
+            Token::new(TokenType::Identifier, (0, 3), 1),
+            Token::new(TokenType::LeftParen, (3, 4), 1),
+            Token::new(TokenType::Number, (4, 5), 1),
+            Token::new(TokenType::Comma, (5, 6), 1),
+            Token::new(TokenType::Number, (6, 7), 1),
+            Token::new(TokenType::RightParen, (7, 8), 1),
+            Token::new(TokenType::Semicolon, (8, 9), 1)
+        ];
+        let mut parser = Parser::new("foo(1,2);");
+        let statements = parser.parse(tokens).unwrap();
+        assert_eq!(
+            Statement::Expression(
+                Expression::Call(
+                    Box::new(Expression::Variable(Lexeme::new(0, 3)).wrap(Lexeme::new(0, 3))), 
+                    Lexeme::new(7, 8), 
+                    vec![
+                        Box::new(Expression::Literal(LiteralValue::Number(1.0)).wrap(Lexeme::new(4, 5))),
+                        Box::new(Expression::Literal(LiteralValue::Number(2.0)).wrap(Lexeme::new(6, 7)))
+                    ]
+                ).wrap(Lexeme::new(0, 8))
             ),
             *statements.get(0).unwrap()
         )

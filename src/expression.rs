@@ -6,6 +6,7 @@ use crate::token::Lexeme;
 pub enum Expression<'a> {
     Assigment(Lexeme, Box<MaterializableExpression<'a>>),
     Binary(Box<MaterializableExpression<'a>>, Box<MaterializableExpression<'a>>, BinaryOperator),
+    Call(Box<MaterializableExpression<'a>>, Lexeme, Vec<Box<MaterializableExpression<'a>>>),
     Grouping(Box<MaterializableExpression<'a>>),
     Literal(LiteralValue<'a>),
     Logical(Box<MaterializableExpression<'a>>, Box<MaterializableExpression<'a>>, LogicalOperator),
@@ -104,6 +105,7 @@ impl<'a> Display for Expression<'a> {
         match self {
             Self::Assigment(name, expression) => f.write_str(format!("{:?} = {}", name, expression.to_string()).as_str()),
             Self::Binary(lhs, rhs, op) => f.write_str(format!("{} {} {}", lhs.to_string(), rhs.to_string(), op.to_string()).as_str()),
+            Self::Call(callee, _, arguments) => f.write_str(format!("{}({:?})", callee.to_string(), arguments).as_str()),
             Self::Grouping(expression) => f.write_str(format!("({})", expression.to_string()).as_str()),
             Self::Unary(op, expression) => f.write_str(format!("{}{}", op.to_string(), expression.to_string()).as_str()),
             Self::Literal(literal_value) => f.write_str(literal_value.to_string().as_str()),

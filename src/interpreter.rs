@@ -1,11 +1,12 @@
-use std::{str::FromStr, fmt::{Formatter, Display}, rc::Rc, cell::RefCell};
+use std::{str::FromStr, fmt::{Formatter, Display}, rc::Rc, cell::RefCell, ops::Deref, time::UNIX_EPOCH};
 
 use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
     context: Context<'a>,
-    environment: Rc<RefCell<Environment>>
+    environment: Rc<RefCell<Environment>>,
+    globals: Rc<RefCell<Environment>>
 }
 
 #[derive(PartialEq, Clone)]
@@ -13,12 +14,33 @@ pub enum FroxValue {
     Number(f64),
     String(String),
     Boolean(bool),
+    Function(Callable),
     Nil
+}
+
+#[derive(PartialEq, Clone)]
+pub struct Callable {
+    pub call: fn(Vec<FroxValue>) -> FroxValue,
+    pub arity: u8
+}
+
+impl Callable {
+    fn new(call: fn(Vec<FroxValue>) -> FroxValue, arity: u8) -> Self {
+        Callable { call, arity }
+    }
 }
 
 impl<'a> Interpreter<'a> {
     pub fn new(source: &'a str, environment: Rc<RefCell<Environment>>) -> Self {
-        Interpreter { context: Context::new(source), environment }
+        environment.borrow_mut().define("clock".to_string(), FroxValue::Function(Callable::new(
+            |_| {
+                let now = std::time::SystemTime::now();
+                let epoch_millis = now.duration_since(UNIX_EPOCH).expect("").as_millis() as f64;
+                FroxValue::Number(epoch_millis)
+            }, 
+            0
+        )));
+        Interpreter { context: Context::new(source), environment: environment.clone(), globals: environment.clone() }
     }
 
     pub fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, print_stream: &mut F) -> Result<()> {
@@ -118,7 +140,8 @@ impl<'a> Interpreter<'a> {
             Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value)),
             Expression::Variable(lexeme) => self.environment.borrow().get(lexeme.materialize(&self.context).to_string(), lexeme),
             Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme),
-            Expression::Logical(left, right, operator) => self.logical(left, right, operator) 
+            Expression::Logical(left, right, operator) => self.logical(left, right, operator),
+            Expression::Call(callee, _, arguments) => self.call(callee, arguments),
         }.map_err(|error| Error::FroxError(error.format_error(self.context.source)))
     }
 
@@ -206,6 +229,25 @@ impl<'a> Interpreter<'a> {
         self.evaluate(rhs)
     }
 
+    fn call(&mut self, callee: &MaterializableExpression, arguments: &Vec<Box<MaterializableExpression>>) -> Result<FroxValue> {
+        let evaluated_callee = self.evaluate(callee)?;
+
+        let mut evaluated_arguments = Vec::new();
+        for argument in arguments {
+            evaluated_arguments.push(self.evaluate(argument)?);
+        }
+
+        match evaluated_callee {
+            FroxValue::Function(callable) => {
+                if callable.arity != evaluated_arguments.len() as u8 {
+                    return Err(Error::InterpreterError(format!("Expected {} arguments but got {}", callable.arity, evaluated_arguments.len()), None))
+                }
+                Ok((callable.call)(evaluated_arguments))
+            },
+            _ => Err(Error::InterpreterError("Invalid invocation target".to_string(), Some(callee.lexeme)))
+        }
+    }
+
     fn to_boolean(literal: FroxValue, lexeme: Lexeme) -> Result<bool> {
         match literal {
             FroxValue::Boolean(bool) => Ok(bool),
@@ -266,6 +308,7 @@ impl std::fmt::Debug for FroxValue {
             FroxValue::Boolean(bool) => f.write_str(format!("{}", bool).as_str()),
             FroxValue::Number(number) => f.write_str(format!("{}", number).as_str()),
             FroxValue::String(string) => f.write_str(["\"", string.as_str(), "\""].concat().as_str()),
+            FroxValue::Function(callable) => f.write_str(format!("fn({})", callable.arity).as_str()),
             FroxValue::Nil => f.write_str("nil")
         }
     }
