@@ -61,11 +61,39 @@ impl<'a> Parser<'a> {
 
     fn declaration(&mut self) -> Result<Statement<'a>> {
         match self.token_iterator.peek() {
+            Some(Token { token_type: TokenType::Fun, ..}) => self.function(),
             Some(Token { token_type: TokenType::Var, .. }) => self.variable_declaration(),
             _ => self.statement()
         }
 
         // todo: synchronize
+    }
+
+    fn function(&mut self) -> Result<Statement<'a>> {
+        let name = self.consume(&TokenType::Identifier)?.lexeme;
+
+        self.consume(&TokenType::LeftParen)?;
+        let mut parameters = Vec::new();
+        if let Some(TokenType::LeftParen) = self.token_iterator.peek().map(|token| token.token_type) {
+            loop {
+                if parameters.len() > 256 {
+                    return Err(Error::ParserError("Can't have more than 255 parameters".to_string(), None))
+                }
+
+                parameters.push(self.consume(&TokenType::Identifier)?.lexeme);
+                match self.token_iterator.peek() {
+                    Some(Token { token_type: TokenType::Comma, .. }) => continue,
+                    Some(_) => break,
+                    _ => return Err(Error::ParserError("Reached end of file while parsing function parameters".to_string(), None))
+                }
+            }
+        }
+
+        self.consume(&TokenType::RightParen)?;
+        self.consume(&TokenType::LeftBrace)?;
+        let body = self.block()?;
+        
+        Ok(Statement::Function(name, parameters, body))
     }
 
     fn variable_declaration(&mut self) -> Result<Statement<'a>> {

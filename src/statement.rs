@@ -7,5 +7,6 @@ pub enum Statement<'a> {
     Var(Lexeme, Option<MaterializableExpression<'a>>),
     Block(Vec<Statement<'a>>),
     If(MaterializableExpression<'a>, Box<Statement<'a>>, Option<Box<Statement<'a>>>),
-    While(MaterializableExpression<'a>, Box<Statement<'a>>)
+    While(MaterializableExpression<'a>, Box<Statement<'a>>),
+    Function(Lexeme, Vec<Lexeme>, Vec<Statement<'a>>)
 }
