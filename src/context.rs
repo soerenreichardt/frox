@@ -1,12 +1,14 @@
+use std::rc::Rc;
+
 use crate::error::{ErrorCollector, Error};
 
-pub struct Context<'a> {
-    pub source: &'a str,
+pub struct Context {
+    pub source: Rc<str>,
     pub error_collector: ErrorCollector
 }
 
-impl<'a> Context<'a> {
-    pub fn new(source: &'a str) -> Self {
+impl Context {
+    pub fn new(source: Rc<str>) -> Self {
         Context {
             source,
             error_collector: ErrorCollector::new()
@@ -22,11 +24,5 @@ impl<'a> Context<'a> {
             Some(message) => Err(Error::FroxError(message)),
             None => Ok(result)
         }
-    }
-}
-
-impl<'a> Default for Context<'a> {
-    fn default() -> Self {
-        Self { source: Default::default(), error_collector: Default::default() }
     }
 }

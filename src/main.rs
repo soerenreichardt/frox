@@ -14,29 +14,28 @@ fn main() {
     }
 }
 
-fn run_file(path: &str, mut frox: FroxRunner) {
+fn run_file<'a>(path: &str, mut frox: FroxRunner<'a>) {
     let source = fs::read_to_string(path)
         .expect("Should have been able to read the file");
-    match frox.run(&source) {
+    match frox.run(source.into()) {
         Ok(_) => (),
         Err(error) => println!("{}", error),
     }
 }
 
-fn run_prompt(mut frox: FroxRunner) {
-    let mut buffer = String::new();
+fn run_prompt<'a>(mut frox: FroxRunner<'a>) {
     let stdin = io::stdin();
 
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
-        buffer.clear();
+        let mut buffer = String::new();
         stdin.lock().read_line(&mut buffer).unwrap();
         buffer = buffer.trim().to_string();
         if buffer.is_empty() {
             return;
         }
-        match frox.run(&buffer) {
+        match frox.run(buffer.into()) {
             Ok(_) => (),
             Err(error) => println!("{}", error),
         }

@@ -9,18 +9,18 @@ use crate::token::Lexeme;
 
 
 #[derive(Clone)]
-pub struct Environment {
+pub struct Environment<'a> {
     values: HashMap<String, FroxValue>,
-    parent: Option<Rc<RefCell<Environment>>>
+    parent: Option<Rc<RefCell<Environment<'a>>>>
 }
 
-impl Environment {
+impl<'a> Environment<'a> {
 
     pub fn new() -> Self {
         Environment { values: HashMap::new(), parent: None }
     }
 
-    pub fn new_inner(environment: Rc<RefCell<Environment>>) -> Self {
+    pub fn new_inner(environment: Rc<RefCell<Environment<'a>>>) -> Self {
         Environment { values: HashMap::new(), parent: Some(environment) }
     }
 
@@ -52,8 +52,8 @@ impl Environment {
     }
 }
 
-impl From<Environment> for Rc<RefCell<Environment>> {
-    fn from(env: Environment) -> Self {
+impl<'a> From<Environment<'a>> for Rc<RefCell<Environment<'a>>> {
+    fn from(env: Environment<'a>) -> Self {
         Rc::new(RefCell::new(env))
     }
 }

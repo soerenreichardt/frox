@@ -1,28 +1,28 @@
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 
 use crate::token::Lexeme;
 
 #[derive(Debug, PartialEq)]
-pub enum Expression<'a> {
-    Assigment(Lexeme, Box<MaterializableExpression<'a>>),
-    Binary(Box<MaterializableExpression<'a>>, Box<MaterializableExpression<'a>>, BinaryOperator),
-    Call(Box<MaterializableExpression<'a>>, Lexeme, Vec<Box<MaterializableExpression<'a>>>),
-    Grouping(Box<MaterializableExpression<'a>>),
-    Literal(LiteralValue<'a>),
-    Logical(Box<MaterializableExpression<'a>>, Box<MaterializableExpression<'a>>, LogicalOperator),
-    Unary(UnaryOperator, Box<MaterializableExpression<'a>>),
+pub enum Expression {
+    Assigment(Lexeme, Box<MaterializableExpression>),
+    Binary(Box<MaterializableExpression>, Box<MaterializableExpression>, BinaryOperator),
+    Call(Box<MaterializableExpression>, Lexeme, Vec<Box<MaterializableExpression>>),
+    Grouping(Box<MaterializableExpression>),
+    Literal(LiteralValue),
+    Logical(Box<MaterializableExpression>, Box<MaterializableExpression>, LogicalOperator),
+    Unary(UnaryOperator, Box<MaterializableExpression>),
     Variable(Lexeme)
 }
 
 #[derive(Debug, PartialEq)]
-pub struct MaterializableExpression<'a> {
-    pub expression: Expression<'a>,
+pub struct MaterializableExpression {
+    pub expression: Expression,
     pub lexeme: Lexeme
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum LiteralValue<'a> {
-    String(&'a str),
+pub enum LiteralValue {
+    String(Rc<str>),
     Number(f64),
     Boolean(bool),
     Nil
@@ -54,7 +54,7 @@ pub enum LogicalOperator {
     Or
 }
 
-impl<'a> Display for LiteralValue<'a> {
+impl Display for LiteralValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LiteralValue::String(string) => f.write_str(string),
@@ -100,7 +100,7 @@ impl Display for LogicalOperator {
     }
 }
 
-impl<'a> Display for Expression<'a> {
+impl Display for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Assigment(name, expression) => f.write_str(format!("{:?} = {}", name, expression.to_string()).as_str()),
@@ -115,24 +115,24 @@ impl<'a> Display for Expression<'a> {
     }
 }
 
-impl<'a> Display for MaterializableExpression<'a> {
+impl Display for MaterializableExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.expression.to_string().as_str())
     }
 }
 
-impl<'a> Expression<'a> {
-    pub fn wrap_default(self) -> MaterializableExpression<'a> {
+impl Expression {
+    pub fn wrap_default(self) -> MaterializableExpression {
         MaterializableExpression::new(self, Lexeme::default())
     }
 
-    pub fn wrap(self, lexeme: Lexeme) -> MaterializableExpression<'a> {
+    pub fn wrap(self, lexeme: Lexeme) -> MaterializableExpression {
         MaterializableExpression::new(self, lexeme)
     }
 }
 
-impl<'a> MaterializableExpression<'a> {
-    pub fn new(expression: Expression<'a>, lexeme: Lexeme) -> Self {
+impl MaterializableExpression {
+    pub fn new(expression: Expression, lexeme: Lexeme) -> Self {
         MaterializableExpression { expression, lexeme }
     }
 }

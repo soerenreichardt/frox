@@ -1,4 +1,5 @@
 use std::iter::Peekable;
+use std::rc::Rc;
 use std::vec::IntoIter;
 
 use crate::context::Context;
@@ -8,9 +9,9 @@ use crate::statement::Statement;
 use crate::{token::*, Materializable};
 use crate::error::*;
 
-pub struct Parser<'a> {
+pub struct Parser {
     token_iterator: Peekable<TokenIterator>,
-    context: Context<'a>
+    context: Context
 }
 
 struct TokenIterator {
@@ -31,8 +32,8 @@ impl Iterator for TokenIterator {
     }
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(source: &'a str) -> Self {
+impl Parser {
+    pub fn new(source: Rc<str>) -> Self {
         Parser {
             token_iterator: TokenIterator::default().peekable(),
             context: Context::new(source),
@@ -46,7 +47,7 @@ impl<'a> Parser<'a> {
         self.token_iterator = token_holder.peekable();
     }
 
-    pub fn parse(&mut self, tokens: Vec<Token>) -> Result<Vec<Statement<'a>>> {
+    pub fn parse(&mut self, tokens: Vec<Token>) -> Result<Vec<Statement>> {
         self.init(tokens);
         let mut statements = Vec::new();
         while self.token_iterator.peek().is_some() {
@@ -59,7 +60,7 @@ impl<'a> Parser<'a> {
         self.context.flush_errors(statements)
     }
 
-    fn declaration(&mut self) -> Result<Statement<'a>> {
+    fn declaration(&mut self) -> Result<Statement> {
         match self.token_iterator.peek() {
             Some(Token { token_type: TokenType::Fun, ..}) => self.function(),
             Some(Token { token_type: TokenType::Var, .. }) => self.variable_declaration(),
@@ -69,7 +70,7 @@ impl<'a> Parser<'a> {
         // todo: synchronize
     }
 
-    fn function(&mut self) -> Result<Statement<'a>> {
+    fn function(&mut self) -> Result<Statement> {
         let name = self.consume(&TokenType::Identifier)?.lexeme;
 
         self.consume(&TokenType::LeftParen)?;
@@ -96,7 +97,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Function(name, parameters, body))
     }
 
-    fn variable_declaration(&mut self) -> Result<Statement<'a>> {
+    fn variable_declaration(&mut self) -> Result<Statement> {
         self.token_iterator.next();
         let name = self.consume(&TokenType::Identifier)?.lexeme;
 
@@ -113,7 +114,7 @@ impl<'a> Parser<'a> {
         Ok(Statement::Var(name, initializer))
     }
 
-    fn statement(&mut self) -> Result<Statement<'a>> {
+    fn statement(&mut self) -> Result<Statement> {
         match self.token_iterator.peek().map(|token| token.token_type) {
             Some(TokenType::For) => self.for_statement(),
             Some(TokenType::If) => self.if_statement(),
@@ -124,7 +125,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn for_statement(&mut self) -> Result<Statement<'a>> {
+    fn for_statement(&mut self) -> Result<Statement> {
         self.token_iterator.next();
         self.consume(&TokenType::LeftParen)?;
 
@@ -169,7 +170,7 @@ impl<'a> Parser<'a> {
         Ok(body)
     }
 
-    fn if_statement(&mut self) -> Result<Statement<'a>> {
+    fn if_statement(&mut self) -> Result<Statement> {
         self.token_iterator.next();
         self.consume(&TokenType::LeftParen)?;
         let condition = self.expression()?;
@@ -191,14 +192,14 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn print_statement(&mut self) -> Result<Statement<'a>> {
+    fn print_statement(&mut self) -> Result<Statement> {
         self.token_iterator.next();
         let value = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
         Ok(Statement::Print(value))
     }
 
-    fn while_statement(&mut self) -> Result<Statement<'a>> {
+    fn while_statement(&mut self) -> Result<Statement> {
         self.token_iterator.next();
         self.consume(&TokenType::LeftParen)?;
         let condition = self.expression()?;
@@ -208,13 +209,13 @@ impl<'a> Parser<'a> {
         Ok(Statement::While(condition, Box::new(body)))
     }
 
-    fn block_statement(&mut self) -> Result<Statement<'a>> {
+    fn block_statement(&mut self) -> Result<Statement> {
         self.token_iterator.next();
         let statements = self.block()?;
         Ok(Statement::Block(statements))
     }
 
-    fn block(&mut self) -> Result<Vec<Statement<'a>>> {
+    fn block(&mut self) -> Result<Vec<Statement>> {
         let mut statements = Vec::new();
 
         loop {
@@ -227,18 +228,18 @@ impl<'a> Parser<'a> {
         Ok(statements)
     }
 
-    fn expression_statement(&mut self) -> Result<Statement<'a>> {
+    fn expression_statement(&mut self) -> Result<Statement> {
         let expression = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
         self.token_iterator.next();
         Ok(Statement::Expression(expression))
     }
 
-    fn expression(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn expression(&mut self) -> Result<MaterializableExpression> {
         self.assignment()
     }
 
-    fn assignment(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn assignment(&mut self) -> Result<MaterializableExpression> {
         let materializable_expression = self.logical()?;
 
         let equals_token = self.token_iterator.next_if(|token| match token {
@@ -260,7 +261,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn logical(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn logical(&mut self) -> Result<MaterializableExpression> {
         let expression = self.equality()?;
 
         let logical_operator = match self.token_iterator.peek().map(|token| token.token_type) {
@@ -281,7 +282,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn equality(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn equality(&mut self) -> Result<MaterializableExpression> {
         let mut materializable_expression = self.comparison()?;
 
         loop {
@@ -302,7 +303,7 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn comparison(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn comparison(&mut self) -> Result<MaterializableExpression> {
         let mut materializable_expression = self.term()?;
 
         loop {
@@ -326,7 +327,7 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn term(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn term(&mut self) -> Result<MaterializableExpression> {
         let mut materializable_expression = self.factor()?;
 
         loop {
@@ -348,7 +349,7 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn factor(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn factor(&mut self) -> Result<MaterializableExpression> {
         let mut materializable_expression = self.unary()?;
 
         loop {
@@ -370,7 +371,7 @@ impl<'a> Parser<'a> {
         Ok(materializable_expression)
     }
 
-    fn unary(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn unary(&mut self) -> Result<MaterializableExpression> {
         let token_type = self.token_iterator.peek().map(|token| token.token_type);
         let operator = match token_type {
             Some(TokenType::Bang) => UnaryOperator::Not,
@@ -387,7 +388,7 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn call(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn call(&mut self) -> Result<MaterializableExpression> {
         let mut expression = self.primary()?;
 
         loop {
@@ -400,7 +401,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn finish_call(&mut self, callee: MaterializableExpression<'a>) -> Result<MaterializableExpression<'a>> {
+    fn finish_call(&mut self, callee: MaterializableExpression) -> Result<MaterializableExpression> {
         self.token_iterator.next();
         let mut arguments = Vec::new();
 
@@ -429,7 +430,7 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn primary(&mut self) -> Result<MaterializableExpression<'a>> {
+    fn primary(&mut self) -> Result<MaterializableExpression> {
         match self.token_iterator.next() {
             Some (token) => {
                 let expression = match token.token_type {
@@ -437,7 +438,7 @@ impl<'a> Parser<'a> {
                     TokenType::True => Expression::Literal(LiteralValue::Boolean(true)).wrap(token.lexeme),
                     TokenType::Nil => Expression::Literal(LiteralValue::Nil).wrap(token.lexeme),
                     TokenType::Number => Expression::Literal(LiteralValue::Number(token.lexeme.materialize(&self.context).parse::<f64>().unwrap())).wrap(token.lexeme),
-                    TokenType::String => Expression::Literal(LiteralValue::String(&self.context.source[token.lexeme.start+1..token.lexeme.end-1])).wrap(token.lexeme),
+                    TokenType::String => Expression::Literal(LiteralValue::String(self.context.source[token.lexeme.start+1..token.lexeme.end-1].into())).wrap(token.lexeme),
                     TokenType::LeftParen => self.grouping_expression(&token.lexeme)?,
                     TokenType::Identifier => Expression::Variable(token.lexeme).wrap(token.lexeme),
                     _ => return Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme)))
@@ -448,7 +449,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn grouping_expression(&mut self, lexeme: &Lexeme) -> Result<MaterializableExpression<'a>> {
+    fn grouping_expression(&mut self, lexeme: &Lexeme) -> Result<MaterializableExpression> {
         let expression = self.expression()?;
         let matchig_parenthesis = self.consume(&TokenType::RightParen)?;
         Ok(Expression::Grouping(Box::new(expression)).wrap(lexeme.union(&matchig_parenthesis.lexeme)))
@@ -475,7 +476,7 @@ mod tests {
             Token::new(TokenType::Number, (3, 4), 1),
             Token::new(TokenType::Semicolon, (4, 5), 1)
         ];
-        let mut parser = Parser::new("1==2;");
+        let mut parser = Parser::new("1==2;".into());
         let expression = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Expression(Expression::Binary(
@@ -495,11 +496,11 @@ mod tests {
             Token::new(TokenType::RightParen, (6, 7), 1),
             Token::new(TokenType::Semicolon, (7, 8), 1)
         ];
-        let mut parser = Parser::new("(\"foo\";");
+        let mut parser = Parser::new("(\"foo\";".into());
         let expression = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Expression(Expression::Grouping(
-                Box::new(Expression::Literal(LiteralValue::String("foo")).wrap(Lexeme::new(1, 6)))
+                Box::new(Expression::Literal(LiteralValue::String("foo".into())).wrap(Lexeme::new(1, 6)))
             ).wrap(Lexeme::new(0, 7))),
             *expression.get(0).unwrap()
         )
@@ -512,7 +513,7 @@ mod tests {
             Token::new(TokenType::Number, (1, 2), 1),
             Token::new(TokenType::And, (2, 3), 1)
         ];
-        let mut parser = Parser::new("(1=");
+        let mut parser = Parser::new("(1=".into());
         let expression = parser.parse(tokens);
         assert!(
             expression.err().unwrap().to_string().contains("Error occured on line 0:\n(1=\n  ^\n  Expected token to be of type RightParen")
@@ -526,11 +527,11 @@ mod tests {
             Token::new(TokenType::String, (6, 11), 1),
             Token::new(TokenType::Semicolon, (11, 14), 1)
         ];
-        let mut parser = Parser::new("print \"foo\";");
+        let mut parser = Parser::new("print \"foo\";".into());
         let statement = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Print(
-                Expression::Literal(LiteralValue::String("foo")).wrap(Lexeme::new(6, 11))
+                Expression::Literal(LiteralValue::String("foo".into())).wrap(Lexeme::new(6, 11))
             ),
             *statement.get(0).unwrap()
         )
@@ -545,7 +546,7 @@ mod tests {
             Token::new(TokenType::Number, (8, 9), 1),
             Token::new(TokenType::Semicolon, (9, 10), 1)
         ];
-        let mut parser = Parser::new("var a = 1;");
+        let mut parser = Parser::new("var a = 1;".into());
         let statements = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Var(
@@ -567,7 +568,7 @@ mod tests {
             Token::new(TokenType::Semicolon, (11, 12), 1),
             Token::new(TokenType::RightBrace, (12, 13), 1)
         ];
-        let mut parser = Parser::new("{ var a = 1; }");
+        let mut parser = Parser::new("{ var a = 1; }".into());
         let statements = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Block(vec![
@@ -587,7 +588,7 @@ mod tests {
             Token::new(TokenType::True, (8, 11), 1),
             Token::new(TokenType::Semicolon, (11, 11), 1)
         ];
-        let mut parser = Parser::new("true or true");
+        let mut parser = Parser::new("true or true".into());
         let statements = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Expression(
@@ -609,7 +610,7 @@ mod tests {
             Token::new(TokenType::RightParen, (4, 5), 1),
             Token::new(TokenType::Semicolon, (5, 6), 1)
         ];
-        let mut parser = Parser::new("foo();");
+        let mut parser = Parser::new("foo();".into());
         let statements = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Expression(
@@ -634,7 +635,7 @@ mod tests {
             Token::new(TokenType::RightParen, (7, 8), 1),
             Token::new(TokenType::Semicolon, (8, 9), 1)
         ];
-        let mut parser = Parser::new("foo(1,2);");
+        let mut parser = Parser::new("foo(1,2);".into());
         let statements = parser.parse(tokens).unwrap();
         assert_eq!(
             Statement::Expression(

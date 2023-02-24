@@ -1,12 +1,12 @@
-use std::{str::FromStr, fmt::{Formatter, Display}, rc::Rc, cell::RefCell, ops::Deref, time::UNIX_EPOCH};
+use std::{str::FromStr, fmt::{Formatter, Display}, rc::Rc, cell::RefCell};
 
-use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable};
+use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
-    context: Context<'a>,
-    environment: Rc<RefCell<Environment>>,
-    globals: Rc<RefCell<Environment>>
+    context: Context,
+    environment: Rc<RefCell<Environment<'a>>>,
+    pub globals: Rc<RefCell<Environment<'a>>>
 }
 
 #[derive(PartialEq, Clone)]
@@ -14,36 +14,18 @@ pub enum FroxValue {
     Number(f64),
     String(String),
     Boolean(bool),
-    Function(Callable),
+    Function(DeclaredFunction),
+    Clock(Clock),
     Nil
 }
 
-#[derive(PartialEq, Clone)]
-pub struct Callable {
-    pub call: fn(Vec<FroxValue>) -> FroxValue,
-    pub arity: u8
-}
-
-impl Callable {
-    fn new(call: fn(Vec<FroxValue>) -> FroxValue, arity: u8) -> Self {
-        Callable { call, arity }
-    }
-}
-
 impl<'a> Interpreter<'a> {
-    pub fn new(source: &'a str, environment: Rc<RefCell<Environment>>) -> Self {
-        environment.borrow_mut().define("clock".to_string(), FroxValue::Function(Callable::new(
-            |_| {
-                let now = std::time::SystemTime::now();
-                let epoch_millis = now.duration_since(UNIX_EPOCH).expect("").as_millis() as f64;
-                FroxValue::Number(epoch_millis)
-            }, 
-            0
-        )));
+    pub fn new(source: Rc<str>, environment: Rc<RefCell<Environment<'a>>>) -> Self {
+        environment.borrow_mut().define("clock".to_string(), FroxValue::Clock(Clock {}));
         Interpreter { context: Context::new(source), environment: environment.clone(), globals: environment.clone() }
     }
 
-    pub fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, print_stream: &mut F) -> Result<()> {
+    pub fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement>, print_stream: &mut F) -> Result<()> {
         for statement in statements {
             match self.execute(statement, print_stream) {
                 Err(error) => self.context.collect_error(error),
@@ -54,17 +36,17 @@ impl<'a> Interpreter<'a> {
         self.context.flush_errors(())
     }
 
-    fn execute<F: FnMut(String) -> ()>(&mut self, statement: &Statement<'a>, print_stream: &mut F) -> Result<()> {
+    fn execute<F: FnMut(String) -> ()>(&mut self, statement: &Statement, print_stream: &mut F) -> Result<()> {
         match statement {
-            Statement::Expression(expression) => self.evaluate(&expression).map(|_| ()),
+            Statement::Expression(expression) => self.evaluate(&expression, print_stream).map(|_| ()),
             Statement::Print(expression) => {
-                let value = self.evaluate(expression)?;
+                let value = self.evaluate(expression, print_stream)?;
                 print_stream(value.to_string());
                 Ok(())
             },
             Statement::Var(lexeme, initializer) => {
                 let initial_value = match initializer {
-                    Some(expression) => self.evaluate(expression),
+                    Some(expression) => self.evaluate(expression, print_stream),
                     None => Ok(FroxValue::Nil)
                 }?;
 
@@ -73,11 +55,12 @@ impl<'a> Interpreter<'a> {
             }
             Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(self.environment.clone()).into(), print_stream),
             Statement::If(condition, then_branch, else_branch) => self.execute_condition(condition, then_branch, else_branch, print_stream),
-            Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream)
+            Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream),
+            Statement::Function(name, parameters, body) => self.execute_function(name, parameters, body, print_stream),
         }
     }
 
-    fn execute_block<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement<'a>>, nested_ennvironment: Rc<RefCell<Environment>>, print_stream: &mut F) -> Result<()> {
+    pub(crate) fn execute_block<F: FnMut(String) -> ()>(&mut self, statements: &[Statement], nested_ennvironment: Rc<RefCell<Environment<'a>>>, print_stream: &mut F) -> Result<()> {
         let previous_environment = std::mem::replace(&mut self.environment, nested_ennvironment);
         let mut execute_statements = || -> Result<()> {
             for statement in statements {
@@ -90,8 +73,8 @@ impl<'a> Interpreter<'a> {
         execution_result
     }
 
-    fn execute_condition<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, then_branch: &Box<Statement<'a>>, else_branch: &Option<Box<Statement<'a>>>, print_stream: &mut F) -> Result<()> {
-        if Self::to_boolean(self.evaluate(condition)?, condition.lexeme)? {
+    fn execute_condition<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, then_branch: &Box<Statement>, else_branch: &Option<Box<Statement>>, print_stream: &mut F) -> Result<()> {
+        if Self::to_boolean(self.evaluate(condition, print_stream)?, condition.lexeme)? {
             return self.execute(&then_branch, print_stream);
         } 
         match else_branch {
@@ -103,26 +86,30 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn execute_while_loop<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, body: &Box<Statement<'a>>, print_stream: &mut F) -> Result<()> {
-        while Self::to_boolean(self.evaluate(condition)?, condition.lexeme)? {
+    fn execute_while_loop<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, body: &Box<Statement>, print_stream: &mut F) -> Result<()> {
+        while Self::to_boolean(self.evaluate(condition, print_stream)?, condition.lexeme)? {
             self.execute(body, print_stream)?;
         }
         Ok(())
     }
 
-    pub fn evaluate(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression) -> Result<FroxValue> {
+    fn execute_function<F: FnMut(String) -> ()>(&mut self, name: &Lexeme, parameters: &Vec<Lexeme>, body: &Vec<Statement>, print_stream: F) -> Result<()> {
+        todo!()
+    }
+
+    pub fn evaluate<F: FnMut(String) -> ()>(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression, print_stream: &mut F) -> Result<FroxValue> {
         match expression {
-            Expression::Grouping(inner_expression) => self.evaluate(inner_expression.as_ref()),
+            Expression::Grouping(inner_expression) => self.evaluate(inner_expression.as_ref(), print_stream),
             Expression::Unary(operator, inner_expression) => {
-                let right = self.evaluate(&inner_expression)?;
+                let right = self.evaluate(&inner_expression, print_stream)?;
                 match operator {
                     UnaryOperator::Minus => self.minus(right, *lexeme),
                     UnaryOperator::Not => self.not(right, *lexeme)
                 }
             },
             Expression::Binary(left, right, operator) => {
-                let lhs = self.evaluate(&left)?;
-                let rhs = self.evaluate(&right)?;
+                let lhs = self.evaluate(&left, print_stream)?;
+                let rhs = self.evaluate(&right, print_stream)?;
                 match operator {
                     BinaryOperator::Subtract => self.subtract(lhs, rhs, *lexeme),
                     BinaryOperator::Divide => self.divide(lhs, rhs, *lexeme),
@@ -139,10 +126,10 @@ impl<'a> Interpreter<'a> {
             },
             Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value)),
             Expression::Variable(lexeme) => self.environment.borrow().get(lexeme.materialize(&self.context).to_string(), lexeme),
-            Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme),
-            Expression::Logical(left, right, operator) => self.logical(left, right, operator),
-            Expression::Call(callee, _, arguments) => self.call(callee, arguments),
-        }.map_err(|error| Error::FroxError(error.format_error(self.context.source)))
+            Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme, print_stream),
+            Expression::Logical(left, right, operator) => self.logical(left, right, operator, print_stream),
+            Expression::Call(callee, _, arguments) => self.call(callee, arguments, print_stream),
+        }.map_err(|error| Error::FroxError(error.format_error(&self.context.source)))
     }
 
     fn minus(&self, literal: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
@@ -209,13 +196,13 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn assignment(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme) -> Result<FroxValue> {
-        let value = self.evaluate(&expression)?;
+    fn assignment<F: FnMut(String) -> ()>(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
+        let value = self.evaluate(&expression, print_stream)?;
         self.environment.borrow_mut().assign(lexeme.materialize(&self.context).to_string(), value, lexeme)
     }
 
-    fn logical(&mut self, lhs: &MaterializableExpression, rhs: &MaterializableExpression, operator: &LogicalOperator) -> Result<FroxValue> {
-        let left = self.evaluate(lhs)?;
+    fn logical<F: FnMut(String) -> ()>(&mut self, lhs: &MaterializableExpression, rhs: &MaterializableExpression, operator: &LogicalOperator, print_stream: &mut F) -> Result<FroxValue> {
+        let left = self.evaluate(lhs, print_stream)?;
 
         let boolean_value = Self::to_boolean(left.clone(), lhs.lexeme)?;
         let return_left = match operator {
@@ -226,23 +213,23 @@ impl<'a> Interpreter<'a> {
         if return_left {
             return Ok(left.clone());
         }
-        self.evaluate(rhs)
+        self.evaluate(rhs, print_stream)
     }
 
-    fn call(&mut self, callee: &MaterializableExpression, arguments: &Vec<Box<MaterializableExpression>>) -> Result<FroxValue> {
-        let evaluated_callee = self.evaluate(callee)?;
+    fn call<F: FnMut(String) -> ()>(&mut self, callee: &MaterializableExpression, arguments: &Vec<Box<MaterializableExpression>>, print_stream: &mut F) -> Result<FroxValue> {
+        let evaluated_callee = self.evaluate(callee, print_stream)?;
 
         let mut evaluated_arguments = Vec::new();
         for argument in arguments {
-            evaluated_arguments.push(self.evaluate(argument)?);
+            evaluated_arguments.push(self.evaluate(argument, print_stream)?);
         }
 
         match evaluated_callee {
             FroxValue::Function(callable) => {
-                if callable.arity != evaluated_arguments.len() as u8 {
-                    return Err(Error::InterpreterError(format!("Expected {} arguments but got {}", callable.arity, evaluated_arguments.len()), None))
+                if callable.arity() != evaluated_arguments.len() as u8 {
+                    return Err(Error::InterpreterError(format!("Expected {} arguments but got {}", callable.arity(), evaluated_arguments.len()), None))
                 }
-                Ok((callable.call)(evaluated_arguments))
+                callable.call(evaluated_arguments, self, print_stream)
             },
             _ => Err(Error::InterpreterError("Invalid invocation target".to_string(), Some(callee.lexeme)))
         }
@@ -291,7 +278,7 @@ impl<'a> Interpreter<'a> {
     }
 }
 
-impl<'a> FroxValue {
+impl FroxValue {
     fn from_literal_value(literal_value: &LiteralValue) -> Self {
         match literal_value {
             LiteralValue::Boolean(bool) => FroxValue::Boolean(*bool),
@@ -302,13 +289,14 @@ impl<'a> FroxValue {
     }
 }
 
-impl std::fmt::Debug for FroxValue {
+impl<'a> std::fmt::Debug for FroxValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FroxValue::Boolean(bool) => f.write_str(format!("{}", bool).as_str()),
             FroxValue::Number(number) => f.write_str(format!("{}", number).as_str()),
             FroxValue::String(string) => f.write_str(["\"", string.as_str(), "\""].concat().as_str()),
-            FroxValue::Function(callable) => f.write_str(format!("fn({})", callable.arity).as_str()),
+            FroxValue::Function(callable) => f.write_str(format!("fn({})", callable.arity()).as_str()),
+            FroxValue::Clock(clock) => f.write_str("clock()"),
             FroxValue::Nil => f.write_str("nil")
         }
     }
@@ -362,20 +350,20 @@ mod tests {
         let actual = evaluate_comparison(LiteralValue::Nil, LiteralValue::Nil, BinaryOperator::Compare);
         assert_eq!(true, actual, "Nil == Nil");
 
-        let actual = evaluate_comparison(LiteralValue::Nil, LiteralValue::String("foo"), BinaryOperator::Compare);
+        let actual = evaluate_comparison(LiteralValue::Nil, LiteralValue::String("foo".into()), BinaryOperator::Compare);
         assert_eq!(false, actual, "Nil == \"foo\"");
     }
 
     #[test]
     fn should_concatenate_strings() {
         let expression = Expression::Binary(
-            Box::new(Expression::Literal(LiteralValue::String("foo")).wrap_default()), 
-            Box::new(Expression::Literal(LiteralValue::String("bar")).wrap_default()),
+            Box::new(Expression::Literal(LiteralValue::String("foo".into())).wrap_default()), 
+            Box::new(Expression::Literal(LiteralValue::String("bar".into())).wrap_default()),
             BinaryOperator::Add
         ).wrap_default();
         let environment = Environment::new();
-        let mut interpreter = Interpreter::new("", environment.into());
-        let value = match interpreter.evaluate(&expression) {
+        let mut interpreter = Interpreter::new("".into(), environment.into());
+        let value = match interpreter.evaluate(&expression, &mut |_| ()) {
             Ok(FroxValue::String(value)) => value,
             _ => panic!("{:?}", expression)
         };
@@ -390,8 +378,8 @@ mod tests {
             operator
         ).wrap_default();
         let environment = Environment::new();
-        let mut interpreter = Interpreter::new("", environment.into());
-        match interpreter.evaluate(&expression) {
+        let mut interpreter = Interpreter::new("".into(), environment.into());
+        match interpreter.evaluate(&expression, &mut |_| ()) {
             Ok(FroxValue::Number(value)) => value,
             _ => panic!("{:?}", expression)
         }
@@ -404,8 +392,8 @@ mod tests {
             operator
         ).wrap_default();
         let environment = Environment::new();
-        let mut interpreter = Interpreter::new("", environment.into());
-        match interpreter.evaluate(&expression) {
+        let mut interpreter = Interpreter::new("".into(), environment.into());
+        match interpreter.evaluate(&expression, &mut |_| ()) {
             Ok(FroxValue::Boolean(value)) => value,
             _ => panic!("{:?}", expression)
         }
