@@ -21,7 +21,7 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Result<Vec<Token>> {
+    pub(crate) fn scan_tokens(&mut self) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
 
         while !self.is_at_end() {

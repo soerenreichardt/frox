@@ -47,7 +47,7 @@ impl Parser {
         self.token_iterator = token_holder.peekable();
     }
 
-    pub fn parse(&mut self, tokens: Vec<Token>) -> Result<Vec<Statement>> {
+    pub(crate) fn parse(&mut self, tokens: Vec<Token>) -> Result<Vec<Statement>> {
         self.init(tokens);
         let mut statements = Vec::new();
         while self.token_iterator.peek().is_some() {
@@ -123,6 +123,7 @@ impl Parser {
             Some(TokenType::For) => self.for_statement(),
             Some(TokenType::If) => self.if_statement(),
             Some(TokenType::Print) => self.print_statement(),
+            Some(TokenType::Return) => self.return_statement(),
             Some(TokenType::While) => self.while_statement(),
             Some(TokenType::LeftBrace) => self.block_statement(),
             _ => self.expression_statement()
@@ -201,6 +202,17 @@ impl Parser {
         let value = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
         Ok(Statement::Print(value))
+    }
+
+    fn return_statement(&mut self) -> Result<Statement> {
+        self.token_iterator.next();
+        let value = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Semicolon) | None => None,
+            Some(_) => Some(self.expression()?),
+        };
+
+        self.consume(&TokenType::Semicolon)?;
+        Ok(Statement::Return(value))
     }
 
     fn while_statement(&mut self) -> Result<Statement> {

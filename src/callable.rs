@@ -1,7 +1,7 @@
 use std::{time::UNIX_EPOCH, rc::Rc, fmt::Display};
 
 use crate::{interpreter::{FroxValue, Interpreter}, statement::Statement, environment::Environment};
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 pub(crate) trait Callable {
     fn name(&self) -> Rc<str>;
@@ -12,7 +12,7 @@ pub(crate) trait Callable {
 }
 
 #[derive(PartialEq, Clone)]
-pub(crate) struct DeclaredFunction {
+pub struct DeclaredFunction {
     pub(crate) name: Rc<str>, 
     pub(crate) parameters: Vec<Rc<str>>,
     pub(crate) body: Rc<Vec<Statement>>
@@ -33,8 +33,11 @@ impl Callable for DeclaredFunction {
             environment.define(parameter.to_string(), argument.clone());
         }
 
-        interpreter.execute_block(&self.body, environment.into(), print_stream)?;
-        Ok(FroxValue::Nil)
+        match interpreter.execute_block(&self.body, environment.into(), print_stream) {
+            Ok(_) => Ok(FroxValue::Nil),
+            Err(Error::ReturnCall(return_value)) => Ok(return_value),
+            Err(error) => Err(error)
+        }
     }
 }
 
@@ -56,7 +59,7 @@ impl Callable for Clock {
         0
     }
 
-    fn call<F: FnMut(String) -> ()>(&self, arguments: Vec<FroxValue>, interpreter: &mut Interpreter, print_stream: &mut F) -> Result<FroxValue> {
+    fn call<F: FnMut(String) -> ()>(&self, _arguments: Vec<FroxValue>, _interpreter: &mut Interpreter, _print_stream: &mut F) -> Result<FroxValue> {
         let now = std::time::SystemTime::now();
         let epoch_millis = now.duration_since(UNIX_EPOCH).expect("").as_millis() as f64;
         Ok(FroxValue::Number(epoch_millis))

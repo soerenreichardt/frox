@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{token::Lexeme};
+use crate::{token::Lexeme, interpreter::FroxValue};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -9,7 +9,8 @@ pub enum Error {
     FroxError(String),
     ScannerError(String, usize, usize),
     ParserError(String, Option<Lexeme>),
-    InterpreterError(String, Option<Lexeme>)
+    InterpreterError(String, Option<Lexeme>),
+    ReturnCall(FroxValue)
 }
 
 pub struct ErrorCollector {
@@ -24,7 +25,8 @@ impl Error {
             Self::ParserError(_, None) => self.to_string(),
             Self::InterpreterError(message, Some(lexeme)) => Self::pretty_print_error(source, message, lexeme),
             Self::InterpreterError(_, None) => self.to_string(),
-            Self::FroxError(message) => message.to_owned()
+            Self::FroxError(message) => message.to_owned(),
+            Self::ReturnCall(value) => self.to_string()
         }
     }
 
@@ -91,7 +93,7 @@ impl ErrorCollector {
         ErrorCollector { errors: Vec::new() }
     }
 
-    pub fn collect(&mut self, error: Error) {
+    pub(crate) fn collect(&mut self, error: Error) {
         self.errors.push(error)
     }
 
@@ -128,8 +130,9 @@ impl Display for Error {
         match self {
             Self::FroxError(message) => f.write_str(message),            
             Self::ScannerError(message, ..) => f.write_str(message),            
-            Self::ParserError(message, ..) => f.write_str(message)   ,
-            Self::InterpreterError(message, ..) => f.write_str(message)         
+            Self::ParserError(message, ..) => f.write_str(message),
+            Self::InterpreterError(message, ..) => f.write_str(message)         ,
+            Self::ReturnCall(value) => f.write_str(format!("return {:?}", value).as_str())
         }
     }
 }

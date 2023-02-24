@@ -65,7 +65,7 @@ pub struct Lexeme {
 }
 
 impl TokenType {
-    pub fn from_str(s: &str, line: usize, position: usize) -> Result<Self, Error> {
+    pub(crate) fn from_str(s: &str, line: usize, position: usize) -> Result<Self, Error> {
         match s {
             "(" => Ok(TokenType::LeftParen),
             ")" => Ok(TokenType::RightParen),

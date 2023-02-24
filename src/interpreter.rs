@@ -10,7 +10,7 @@ pub struct Interpreter<'a> {
 }
 
 #[derive(PartialEq, Clone)]
-pub(crate) enum FroxValue {
+pub enum FroxValue {
     Number(f64),
     String(String),
     Boolean(bool),
@@ -25,7 +25,7 @@ impl<'a> Interpreter<'a> {
         Interpreter { context: Context::new(source), environment: environment.clone(), globals: environment.clone() }
     }
 
-    pub fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement>, print_stream: &mut F) -> Result<()> {
+    pub(crate) fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement>, print_stream: &mut F) -> Result<()> {
         for statement in statements {
             match self.execute(statement, print_stream) {
                 Err(error) => self.context.collect_error(error),
@@ -57,6 +57,7 @@ impl<'a> Interpreter<'a> {
             Statement::If(condition, then_branch, else_branch) => self.execute_condition(condition, then_branch, else_branch, print_stream),
             Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream),
             Statement::Function(name, parameters, body) => self.execute_function_declaration(name, parameters, body, print_stream),
+            Statement::Return(value) => self.execute_return(value, print_stream)
         }
     }
 
@@ -80,7 +81,6 @@ impl<'a> Interpreter<'a> {
         match else_branch {
             Some(statement) => self.execute(&statement, print_stream),
             None => {
-                print_stream(FroxValue::Nil.to_string());
                 Ok(())
             }
         }
@@ -101,6 +101,14 @@ impl<'a> Interpreter<'a> {
         let declared_function = DeclaredFunction { name: name.clone(), parameters, body };
         self.environment.borrow_mut().define(name.to_string(), FroxValue::Function(declared_function));
         Ok(())
+    }
+
+    fn execute_return<F: FnMut(String) -> ()>(&mut self, value: &Option<MaterializableExpression>, print_stream: &mut F) -> Result<()> {
+        let evaluated_value = match value {
+            Some(value) => self.evaluate(value, print_stream)?,
+            _ => FroxValue::Nil
+        };
+        Err(Error::ReturnCall(evaluated_value))
     }
 
     pub(crate) fn evaluate<F: FnMut(String) -> ()>(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression, print_stream: &mut F) -> Result<FroxValue> {
