@@ -6,11 +6,11 @@ use crate::error::Result;
 pub struct Interpreter<'a> {
     context: Context,
     environment: Rc<RefCell<Environment<'a>>>,
-    pub globals: Rc<RefCell<Environment<'a>>>
+    pub(crate) globals: Rc<RefCell<Environment<'a>>>
 }
 
 #[derive(PartialEq, Clone)]
-pub enum FroxValue {
+pub(crate) enum FroxValue {
     Number(f64),
     String(String),
     Boolean(bool),
@@ -20,7 +20,7 @@ pub enum FroxValue {
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(source: Rc<str>, environment: Rc<RefCell<Environment<'a>>>) -> Self {
+    pub(crate) fn new(source: Rc<str>, environment: Rc<RefCell<Environment<'a>>>) -> Self {
         environment.borrow_mut().define("clock".to_string(), FroxValue::Clock(Clock {}));
         Interpreter { context: Context::new(source), environment: environment.clone(), globals: environment.clone() }
     }
@@ -56,11 +56,11 @@ impl<'a> Interpreter<'a> {
             Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(self.environment.clone()).into(), print_stream),
             Statement::If(condition, then_branch, else_branch) => self.execute_condition(condition, then_branch, else_branch, print_stream),
             Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream),
-            Statement::Function(name, parameters, body) => self.execute_function(name, parameters, body, print_stream),
+            Statement::Function(name, parameters, body) => self.execute_function_declaration(name, parameters, body, print_stream),
         }
     }
 
-    pub(crate) fn execute_block<F: FnMut(String) -> ()>(&mut self, statements: &[Statement], nested_ennvironment: Rc<RefCell<Environment<'a>>>, print_stream: &mut F) -> Result<()> {
+    pub(crate) fn execute_block<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement>, nested_ennvironment: Rc<RefCell<Environment<'a>>>, print_stream: &mut F) -> Result<()> {
         let previous_environment = std::mem::replace(&mut self.environment, nested_ennvironment);
         let mut execute_statements = || -> Result<()> {
             for statement in statements {
@@ -93,11 +93,17 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    fn execute_function<F: FnMut(String) -> ()>(&mut self, name: &Lexeme, parameters: &Vec<Lexeme>, body: &Vec<Statement>, print_stream: F) -> Result<()> {
-        todo!()
+    fn execute_function_declaration<F: FnMut(String) -> ()>(&mut self, name: &Lexeme, parameters: &[Lexeme], body: &[Statement], print_stream: F) -> Result<()> {
+        let name: Rc<str> = name.materialize(&self.context).into();
+        let parameters: Vec<Rc<str>> = parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>();
+        let body: Rc<Vec<Statement>> = Rc::new(body.to_vec());
+
+        let declared_function = DeclaredFunction { name: name.clone(), parameters, body };
+        self.environment.borrow_mut().define(name.to_string(), FroxValue::Function(declared_function));
+        Ok(())
     }
 
-    pub fn evaluate<F: FnMut(String) -> ()>(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression, print_stream: &mut F) -> Result<FroxValue> {
+    pub(crate) fn evaluate<F: FnMut(String) -> ()>(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression, print_stream: &mut F) -> Result<FroxValue> {
         match expression {
             Expression::Grouping(inner_expression) => self.evaluate(inner_expression.as_ref(), print_stream),
             Expression::Unary(operator, inner_expression) => {
@@ -296,7 +302,7 @@ impl<'a> std::fmt::Debug for FroxValue {
             FroxValue::Number(number) => f.write_str(format!("{}", number).as_str()),
             FroxValue::String(string) => f.write_str(["\"", string.as_str(), "\""].concat().as_str()),
             FroxValue::Function(callable) => f.write_str(format!("fn({})", callable.arity()).as_str()),
-            FroxValue::Clock(clock) => f.write_str("clock()"),
+            FroxValue::Clock(_) => f.write_str("clock()"),
             FroxValue::Nil => f.write_str("nil")
         }
     }

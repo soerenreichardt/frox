@@ -1,19 +1,6 @@
-var a = "global a"; 
-var b = "global b"; 
-var c = "global c"; 
-{
-    var a = "outer a"; 
-    var b = "outer b";
-    {
-        var a = "inner a"; 
-        print a;
-        print b;
-        print c;
-    }
-    print a; 
-    print b; 
-    print c;
+fun count(n) {
+    if (n > 1) count(n - 1);
+    print n;
 }
-print a; 
-print b; 
-print c;
+
+count(3);

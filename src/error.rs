@@ -49,7 +49,6 @@ impl Error {
     }
 
     fn pretty_print_error(source: &str, error_message: &str, Lexeme {start, end }: &Lexeme) -> String {
-        println!("{}", start);
         let mut position: usize = 0;
         let lines = source.lines().collect::<Vec<_>>();
 

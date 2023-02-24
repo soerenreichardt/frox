@@ -71,11 +71,12 @@ impl Parser {
     }
 
     fn function(&mut self) -> Result<Statement> {
+        self.token_iterator.next();
         let name = self.consume(&TokenType::Identifier)?.lexeme;
 
         self.consume(&TokenType::LeftParen)?;
         let mut parameters = Vec::new();
-        if let Some(TokenType::LeftParen) = self.token_iterator.peek().map(|token| token.token_type) {
+        if let Some(TokenType::Identifier) = self.token_iterator.peek().map(|token| token.token_type) {
             loop {
                 if parameters.len() > 256 {
                     return Err(Error::ParserError("Can't have more than 255 parameters".to_string(), None))
@@ -231,7 +232,6 @@ impl Parser {
     fn expression_statement(&mut self) -> Result<Statement> {
         let expression = self.expression()?;
         self.consume(&TokenType::Semicolon)?;
-        self.token_iterator.next();
         Ok(Statement::Expression(expression))
     }
 

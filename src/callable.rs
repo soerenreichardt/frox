@@ -1,4 +1,4 @@
-use std::{time::UNIX_EPOCH, rc::Rc};
+use std::{time::UNIX_EPOCH, rc::Rc, fmt::Display};
 
 use crate::{interpreter::{FroxValue, Interpreter}, statement::Statement, environment::Environment};
 use crate::error::Result;
@@ -12,10 +12,10 @@ pub(crate) trait Callable {
 }
 
 #[derive(PartialEq, Clone)]
-pub struct DeclaredFunction {
-    name: Rc<str>, 
-    parameters: Vec<Rc<str>>,
-    body: Rc<Vec<Statement>>
+pub(crate) struct DeclaredFunction {
+    pub(crate) name: Rc<str>, 
+    pub(crate) parameters: Vec<Rc<str>>,
+    pub(crate) body: Rc<Vec<Statement>>
 }
 
 impl Callable for DeclaredFunction {
@@ -38,6 +38,12 @@ impl Callable for DeclaredFunction {
     }
 }
 
+impl Display for DeclaredFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("<fn {}>", self.name).as_str())
+    }
+}
+
 #[derive(PartialEq, Clone)]
 pub struct Clock;
 
@@ -54,5 +60,11 @@ impl Callable for Clock {
         let now = std::time::SystemTime::now();
         let epoch_millis = now.duration_since(UNIX_EPOCH).expect("").as_millis() as f64;
         Ok(FroxValue::Number(epoch_millis))
+    }
+}
+
+impl Display for Clock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<native fn>")
     }
 }

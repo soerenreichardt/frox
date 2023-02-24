@@ -9,26 +9,26 @@ use crate::token::Lexeme;
 
 
 #[derive(Clone)]
-pub struct Environment<'a> {
+pub(crate) struct Environment<'a> {
     values: HashMap<String, FroxValue>,
     parent: Option<Rc<RefCell<Environment<'a>>>>
 }
 
 impl<'a> Environment<'a> {
 
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Environment { values: HashMap::new(), parent: None }
     }
 
-    pub fn new_inner(environment: Rc<RefCell<Environment<'a>>>) -> Self {
+    pub(crate) fn new_inner(environment: Rc<RefCell<Environment<'a>>>) -> Self {
         Environment { values: HashMap::new(), parent: Some(environment) }
     }
 
-    pub fn define(&mut self, name: String, value: FroxValue) {
+    pub(crate) fn define(&mut self, name: String, value: FroxValue) {
         self.values.insert(name, value);
     }
 
-    pub fn get(&self, name: String, lexeme: &Lexeme) -> Result<FroxValue> {
+    pub(crate) fn get(&self, name: String, lexeme: &Lexeme) -> Result<FroxValue> {
         match self.values.get(&name) {
             Some(value) => Ok(value.clone()),
             None => match &self.parent {
@@ -38,7 +38,7 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub fn assign(&mut self, name: String, value: FroxValue, lexeme: &Lexeme) -> Result<FroxValue> {
+    pub(crate) fn assign(&mut self, name: String, value: FroxValue, lexeme: &Lexeme) -> Result<FroxValue> {
         match self.values.get(&name) {
             Some(_) => {
                 self.values.insert(name, value.clone());

@@ -232,7 +232,6 @@ mod tests {
             .map(|token| &token.token_type)
             .collect::<Vec<_>>();
 
-        println!("Tokens: {:?}", token_types);
         assert!(token_types.is_empty());
     }
 
