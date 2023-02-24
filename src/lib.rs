@@ -62,39 +62,24 @@ mod tests {
 
     #[test]
     fn should_run_simple_calculation() {
-        let mut buffer = "".to_string();
-        FroxRunner::new()
-            .run_with_print_stream("print (2 * 4) / (1 + 1);".into(), |string| buffer = string)
-            .unwrap();
-        assert_eq!(FroxValue::Number(4.0).to_string(), buffer)
+        assert_execution_equals("print (2 * 4) / (1 + 1);", FroxValue::Number(4.0).to_string().as_str())
     }
 
     #[test]
     fn should_execute_if_statement() {
-        let mut buffer = "".to_string();
-        FroxRunner::new()
-            .run_with_print_stream("if (1>2) print 1; else print 2;".into(), |string| {
-                buffer = string
-            })
-            .unwrap();
-        assert_eq!("2", buffer)
+        assert_execution_equals("if (1>2) print 1; else print 2;", "2");
     }
 
     #[test]
     fn should_execute_for_loops() {
-        let mut buffer = "".to_string();
-        FroxRunner::new()
-            .run_with_print_stream(
-                "for (var i=0; i<3; i = i + 1) { print i; }".into(),
-                |string| buffer.push_str(string.as_str()),
-            )
-            .unwrap();
-        assert_eq!("012", buffer);
+        assert_execution_equals(
+            "for (var i=0; i<3; i = i + 1) { print i; }", 
+            "012"
+        );
     }
 
     #[test]
     fn should_handle_blocks_and_scopes() {
-        let mut buffer = String::new();
         let source = r#"
         var a = "global a"; 
         var b = "global b"; 
@@ -116,16 +101,15 @@ mod tests {
         print b; 
         print c;
         "#;
-        FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())).unwrap();
 
-        assert_eq!(
+        assert_execution_equals(
+            source, 
             "\"inner a\"\"outer b\"\"global c\"\"outer a\"\"outer b\"\"global c\"\"global a\"\"global b\"\"global c\""
-            , buffer);
+        );
     }
 
     #[test]
     fn should_execute_declared_functions() {
-        let mut buffer = String::new();
         let source = r#"
         fun count(n) {
             if (n > 1) count(n - 1);
@@ -134,7 +118,22 @@ mod tests {
         
         count(3);
         "#;
+        assert_execution_equals(source, "nil123");
+    }
+
+    #[test]
+    fn should_execute_functions_with_multiple_params() {
+        let source = r#"
+        fun sayHi(first, last) {
+            print "Hi, " + first + " " + last + "!"; }
+            sayHi("Dear", "Reader");
+        "#;
+        assert_execution_equals(source, "\"Hi, Dear Reader!\"");
+    }
+
+    fn assert_execution_equals(source: &str, expected: &str) {
+        let mut buffer = String::new();
         FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())).unwrap();
-        assert_eq!("nil123", buffer);
+        assert_eq!(expected, buffer);
     }
 }

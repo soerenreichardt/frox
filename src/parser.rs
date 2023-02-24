@@ -84,7 +84,10 @@ impl Parser {
 
                 parameters.push(self.consume(&TokenType::Identifier)?.lexeme);
                 match self.token_iterator.peek() {
-                    Some(Token { token_type: TokenType::Comma, .. }) => continue,
+                    Some(Token { token_type: TokenType::Comma, .. }) => {
+                        self.token_iterator.next();
+                        continue
+                    },
                     Some(_) => break,
                     _ => return Err(Error::ParserError("Reached end of file while parsing function parameters".to_string(), None))
                 }
