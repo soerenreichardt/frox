@@ -151,9 +151,27 @@ mod tests {
         assert_execution_equals(source, "12")
     }
 
+    #[test]
+    fn should_run_lambdas() {
+        let source = r#"
+        fun thrice(fn) {
+            for (var i = 1; i <= 3; i = i + 1) {
+                fn(i); 
+            }
+        }
+        thrice(fun (a) { 
+            print a;
+        });
+        "#;
+        assert_execution_equals(source, "123")
+    }
+
     fn assert_execution_equals(source: &str, expected: &str) {
         let mut buffer = String::new();
-        FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())).unwrap();
+        match FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())) {
+            Err(error) => println!("{}", error.format_error(source)),
+            _ => ()
+        };
         assert_eq!(expected, buffer);
     }
 }

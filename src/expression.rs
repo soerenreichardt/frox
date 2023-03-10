@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::token::Lexeme;
+use crate::{token::Lexeme, statement::Statement};
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Expression {
@@ -11,7 +11,8 @@ pub enum Expression {
     Literal(LiteralValue),
     Logical(Box<MaterializableExpression>, Box<MaterializableExpression>, LogicalOperator),
     Unary(UnaryOperator, Box<MaterializableExpression>),
-    Variable(Lexeme)
+    Variable(Lexeme),
+    Lambda(Box<Statement>)
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -108,6 +109,7 @@ impl Display for Expression {
             Self::Call(callee, _, arguments) => f.write_str(format!("{}({:?})", callee.to_string(), arguments).as_str()),
             Self::Grouping(expression) => f.write_str(format!("({})", expression.to_string()).as_str()),
             Self::Unary(op, expression) => f.write_str(format!("{}{}", op.to_string(), expression.to_string()).as_str()),
+            Self::Lambda(parameters) => f.write_str(format!("fn ({:?})", parameters).as_str()),
             Self::Literal(literal_value) => f.write_str(literal_value.to_string().as_str()),
             Self::Logical(lhs, rhs, op) => f.write_str(format!("{} {} {}", lhs.to_string(), rhs.to_string(), op.to_string()).as_str()),
             Self::Variable(name) => f.write_str(format!("var {:?}", name).as_str())

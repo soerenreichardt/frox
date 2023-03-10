@@ -83,14 +83,17 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_function_declaration<F: FnMut(String) -> ()>(&mut self, name: &Lexeme, parameters: &[Lexeme], body: &[Statement], _print_stream: F) -> Result<()> {
-        let name: Rc<str> = name.materialize(&self.context).into();
+    fn execute_function_declaration<F: FnMut(String) -> ()>(&mut self, name: &Option<Lexeme>, parameters: &[Lexeme], body: &[Statement], _print_stream: F) -> Result<()> {
+        let name: Rc<str> = name.expect("Function should have a name").materialize(&self.context).into();
+        let declared_function = self.declared_function(name, parameters, body);
+        self.environment.borrow_mut().define(declared_function.name().to_string(), FroxValue::Function(declared_function));
+        Ok(())
+    }
+
+    fn declared_function(&mut self, name: Rc<str>, parameters: &[Lexeme], body: &[Statement]) -> DeclaredFunction {
         let parameters: Vec<Rc<str>> = parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>();
         let body: Rc<Vec<Statement>> = Rc::new(body.to_vec());
-
-        let declared_function = DeclaredFunction { name: name.clone(), parameters, body, closure: self.environment.clone() };
-        self.environment.borrow_mut().define(name.to_string(), FroxValue::Function(declared_function));
-        Ok(())
+        DeclaredFunction { name: name.clone(), parameters, body, closure: self.environment.clone() }
     }
 
     fn execute_return<F: FnMut(String) -> ()>(&mut self, value: &Option<MaterializableExpression>, print_stream: &mut F) -> Result<()> {
@@ -133,6 +136,7 @@ impl Interpreter {
             Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme, print_stream),
             Expression::Logical(left, right, operator) => self.logical(left, right, operator, print_stream),
             Expression::Call(callee, _, arguments) => self.call(callee, arguments, print_stream),
+            Expression::Lambda(function_declaration) => self.lambda(function_declaration),
         }.map_err(|error| Error::FroxError(Error::format_interpreter_error(&error, lexeme, &self.context.source)))
     }
 
@@ -172,6 +176,15 @@ impl Interpreter {
                 callable.call(evaluated_arguments, self, print_stream)
             },
             _ => Err(Error::InterpreterError("Invalid invocation target".to_string()))
+        }
+    }
+
+    fn lambda(&mut self, function_declaration: &Statement) -> Result<FroxValue> {
+        if let Statement::Function(None, parameters, body) = function_declaration {
+            let name = "anonymous".into();
+            return Ok(FroxValue::Function(self.declared_function(name, parameters, body)));
+        } else {
+            return Err(Error::InterpreterError("Expected lambda".to_string()));
         }
     }
 }

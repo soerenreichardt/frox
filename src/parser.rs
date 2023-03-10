@@ -62,7 +62,7 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Statement> {
         match self.token_iterator.peek() {
-            Some(Token { token_type: TokenType::Fun, ..}) => self.function(),
+            Some(Token { token_type: TokenType::Fun, ..}) => self.function(false),
             Some(Token { token_type: TokenType::Var, .. }) => self.variable_declaration(),
             _ => self.statement()
         }
@@ -70,9 +70,13 @@ impl Parser {
         // todo: synchronize
     }
 
-    fn function(&mut self) -> Result<Statement> {
-        self.token_iterator.next();
-        let name = self.consume(&TokenType::Identifier)?.lexeme;
+    fn function(&mut self, lambda: bool) -> Result<Statement> {
+        
+        let mut name = None;
+        if !lambda {
+            self.token_iterator.next();
+            name = Some(self.consume(&TokenType::Identifier)?.lexeme);
+        }
 
         self.consume(&TokenType::LeftParen)?;
         let mut parameters = Vec::new();
@@ -456,12 +460,17 @@ impl Parser {
                     TokenType::String => Expression::Literal(LiteralValue::String(self.context.source[token.lexeme.start+1..token.lexeme.end-1].into())).wrap(token.lexeme),
                     TokenType::LeftParen => self.grouping_expression(&token.lexeme)?,
                     TokenType::Identifier => Expression::Variable(token.lexeme).wrap(token.lexeme),
+                    TokenType::Fun => self.lambda(token.lexeme)?,
                     _ => return Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme)))
                 };
                 Ok(expression)
             },
             None => Err(Error::ParserError("Reached end of file while parsing".to_string(), None))
         }
+    }
+
+    fn lambda(&mut self, lexeme: Lexeme) -> Result<MaterializableExpression> {
+        Ok(Expression::Lambda(Box::new(self.function(true)?)).wrap(lexeme))
     }
 
     fn grouping_expression(&mut self, lexeme: &Lexeme) -> Result<MaterializableExpression> {
