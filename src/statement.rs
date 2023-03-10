@@ -1,6 +1,6 @@
 use crate::{expression::MaterializableExpression, token::Lexeme};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Statement {
     Expression(MaterializableExpression),
     Print(MaterializableExpression),

@@ -1,22 +1,12 @@
-use std::{str::FromStr, fmt::{Formatter, Display}, rc::Rc, cell::RefCell};
+use std::{rc::Rc, cell::RefCell};
 
-use crate::{context::Context, expression::{Expression, LiteralValue, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}};
+use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
     context: Context,
     environment: Rc<RefCell<Environment<'a>>>,
     pub(crate) globals: Rc<RefCell<Environment<'a>>>
-}
-
-#[derive(PartialEq, Clone)]
-pub enum FroxValue {
-    Number(f64),
-    String(String),
-    Boolean(bool),
-    Function(DeclaredFunction),
-    Clock(Clock),
-    Nil
 }
 
 impl<'a> Interpreter<'a> {
@@ -34,7 +24,7 @@ impl<'a> Interpreter<'a> {
         }
 
         self.context.flush_errors(())
-    }
+    } 
 
     fn execute<F: FnMut(String) -> ()>(&mut self, statement: &Statement, print_stream: &mut F) -> Result<()> {
         match statement {
@@ -75,7 +65,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn execute_condition<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, then_branch: &Box<Statement>, else_branch: &Option<Box<Statement>>, print_stream: &mut F) -> Result<()> {
-        if Self::to_boolean(self.evaluate(condition, print_stream)?, condition.lexeme)? {
+        if self.evaluate(condition, print_stream)?.to_boolean()? {
             return self.execute(&then_branch, print_stream);
         } 
         match else_branch {
@@ -87,7 +77,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn execute_while_loop<F: FnMut(String) -> ()>(&mut self, condition: &MaterializableExpression, body: &Box<Statement>, print_stream: &mut F) -> Result<()> {
-        while Self::to_boolean(self.evaluate(condition, print_stream)?, condition.lexeme)? {
+        while self.evaluate(condition, print_stream)?.to_boolean()? {
             self.execute(body, print_stream)?;
         }
         Ok(())
@@ -117,25 +107,25 @@ impl<'a> Interpreter<'a> {
             Expression::Unary(operator, inner_expression) => {
                 let right = self.evaluate(&inner_expression, print_stream)?;
                 match operator {
-                    UnaryOperator::Minus => self.minus(right, *lexeme),
-                    UnaryOperator::Not => self.not(right, *lexeme)
+                    UnaryOperator::Minus => -right,
+                    UnaryOperator::Not => !right
                 }
             },
             Expression::Binary(left, right, operator) => {
                 let lhs = self.evaluate(&left, print_stream)?;
                 let rhs = self.evaluate(&right, print_stream)?;
                 match operator {
-                    BinaryOperator::Subtract => self.subtract(lhs, rhs, *lexeme),
-                    BinaryOperator::Divide => self.divide(lhs, rhs, *lexeme),
-                    BinaryOperator::Multiply => self.multiply(lhs, rhs, *lexeme),
-                    BinaryOperator::Add => self.add(lhs, rhs, *lexeme),
+                    BinaryOperator::Subtract => lhs - rhs,
+                    BinaryOperator::Divide => lhs / rhs,
+                    BinaryOperator::Multiply => lhs * rhs,
+                    BinaryOperator::Add => lhs + rhs,
 
-                    BinaryOperator::GreaterThan => self.greater_than(lhs, rhs, *lexeme),
-                    BinaryOperator::GreaterThenOrEqual => self.greater_than_or_equal(lhs, rhs, *lexeme),
-                    BinaryOperator::LessThan => self.less_than(lhs, rhs, *lexeme),
-                    BinaryOperator::LessThanOrEqual => self.less_than_or_equal(lhs, rhs, *lexeme),
-                    BinaryOperator::Compare => Ok(FroxValue::Boolean(self.equals(lhs, rhs))),
-                    BinaryOperator::CompareNot => Ok(FroxValue::Boolean(!self.equals(lhs, rhs)))
+                    BinaryOperator::GreaterThan => lhs.greater_than(rhs),
+                    BinaryOperator::GreaterThenOrEqual => lhs.greater_than_or_equal(rhs),
+                    BinaryOperator::LessThan => lhs.less_than(rhs),
+                    BinaryOperator::LessThanOrEqual => lhs.less_than_or_equal(rhs),
+                    BinaryOperator::Compare => lhs.equals(rhs),
+                    BinaryOperator::CompareNot => lhs.not_equals(rhs)
                 }
             },
             Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value)),
@@ -143,71 +133,7 @@ impl<'a> Interpreter<'a> {
             Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme, print_stream),
             Expression::Logical(left, right, operator) => self.logical(left, right, operator, print_stream),
             Expression::Call(callee, _, arguments) => self.call(callee, arguments, print_stream),
-        }.map_err(|error| Error::FroxError(error.format_error(&self.context.source)))
-    }
-
-    fn minus(&self, literal: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        match literal {
-            FroxValue::Number(number) => Ok(FroxValue::Number(-number)),
-            _ => Err(Error::InterpreterError(format!("Unary '-' operator expected number literal, but got {:?}", literal), Some(lexeme)))
-        }
-    }
-
-    fn not(&self, literal: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        Self::to_boolean(literal, lexeme).map(|bool| FroxValue::Boolean(bool))
-    }
-
-    fn subtract(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        self.apply_arithmetic_operation(lhs, rhs, lexeme, |lhs, rhs| lhs - rhs)
-    }
-
-    fn divide(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        self.apply_arithmetic_operation(lhs, rhs, lexeme, |lhs, rhs| lhs / rhs)
-    }
-
-    fn multiply(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        self.apply_arithmetic_operation(lhs, rhs, lexeme, |lhs, rhs| lhs * rhs)
-    }
-
-    fn add(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        match (lhs, rhs) {
-            (FroxValue::Number(left_value), FroxValue::Number(right_value)) => Ok(FroxValue::Number(left_value + right_value)),
-            (FroxValue::String(left_value), FroxValue::String(right_value)) => {
-                Ok(FroxValue::String([left_value, right_value].concat()))
-            },
-            _ => Err(
-                Error::InterpreterError(
-                    format!("Binary '+' operator expected both operands to be number or string literals"), 
-                    Some(lexeme)
-                )
-            )
-        }
-    }
-
-    fn less_than(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        self.apply_comparison(lhs, rhs, lexeme, |lhs, rhs| lhs < rhs)
-    }
-
-    fn less_than_or_equal(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        self.apply_comparison(lhs, rhs, lexeme, |lhs, rhs| lhs <= rhs)
-    }
-
-    fn greater_than(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        self.apply_comparison(lhs, rhs, lexeme, |lhs, rhs| lhs > rhs)
-    }
-
-    fn greater_than_or_equal(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<FroxValue> {
-        self.apply_comparison(lhs, rhs, lexeme, |lhs, rhs| lhs >= rhs)
-    }
-
-    fn equals(&self, lhs: FroxValue, rhs: FroxValue) -> bool {
-        match (lhs, rhs) {
-            (FroxValue::Number(left_value), FroxValue::Number(right_value)) => left_value == right_value,
-            (FroxValue::String(left_value), FroxValue::String(right_value)) => left_value == right_value,
-            (FroxValue::Boolean(left_value), FroxValue::Boolean(right_value)) => left_value == right_value,
-            (FroxValue::Nil, FroxValue::Nil) => true,
-            _ => false
-        }
+        }.map_err(|error| Error::FroxError(Error::format_interpreter_error(&error, lexeme, &self.context.source)))
     }
 
     fn assignment<F: FnMut(String) -> ()>(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
@@ -218,7 +144,7 @@ impl<'a> Interpreter<'a> {
     fn logical<F: FnMut(String) -> ()>(&mut self, lhs: &MaterializableExpression, rhs: &MaterializableExpression, operator: &LogicalOperator, print_stream: &mut F) -> Result<FroxValue> {
         let left = self.evaluate(lhs, print_stream)?;
 
-        let boolean_value = Self::to_boolean(left.clone(), lhs.lexeme)?;
+        let boolean_value = left.clone().to_boolean()?;
         let return_left = match operator {
             LogicalOperator::Or => boolean_value,
             LogicalOperator::And => !boolean_value
@@ -241,89 +167,19 @@ impl<'a> Interpreter<'a> {
         match evaluated_callee {
             FroxValue::Function(callable) => {
                 if callable.arity() != evaluated_arguments.len() as u8 {
-                    return Err(Error::InterpreterError(format!("Expected {} arguments but got {}", callable.arity(), evaluated_arguments.len()), None))
+                    return Err(Error::InterpreterError(format!("Expected {} arguments but got {}", callable.arity(), evaluated_arguments.len())))
                 }
                 callable.call(evaluated_arguments, self, print_stream)
             },
-            _ => Err(Error::InterpreterError("Invalid invocation target".to_string(), Some(callee.lexeme)))
+            _ => Err(Error::InterpreterError("Invalid invocation target".to_string()))
         }
-    }
-
-    fn to_boolean(literal: FroxValue, lexeme: Lexeme) -> Result<bool> {
-        match literal {
-            FroxValue::Boolean(bool) => Ok(bool),
-            FroxValue::Nil => Ok(false),
-            _ => Err(Error::InterpreterError(format!("{:?} cannot be coerced into a boolean literal", literal), Some(lexeme)))
-        }
-    }
-
-    fn apply_arithmetic_operation<F: Fn(f64, f64) -> f64>(
-        &self, 
-        lhs: FroxValue, 
-        rhs: FroxValue,
-        lexeme: Lexeme,
-        number_operation: F) 
-    -> Result<FroxValue> {
-        let (left_value, right_value) = self.extract_numbers_from_literals(lhs, rhs, lexeme)?;
-        Ok(FroxValue::Number(number_operation(left_value, right_value)))
-    }
-
-    fn apply_comparison<F: Fn(f64, f64) -> bool>(
-        &self, 
-        lhs: FroxValue, 
-        rhs: FroxValue, 
-        lexeme: Lexeme,
-        comparison_operation: F) 
-    -> Result<FroxValue> {
-        let (left_value, right_value) = self.extract_numbers_from_literals(lhs, rhs, lexeme)?;
-        Ok(FroxValue::Boolean(comparison_operation(left_value, right_value)))
-    }
-
-    fn extract_numbers_from_literals(&self, lhs: FroxValue, rhs: FroxValue, lexeme: Lexeme) -> Result<(f64, f64)> {
-        match (lhs, rhs) {
-            (FroxValue::Number(left_value), FroxValue::Number(right_value)) => Ok((left_value, right_value)),
-            (left, right) => Err(
-                Error::InterpreterError(
-                    format!("Expected both operands to be of type number, but got ({:?}, {:?})", left, right),
-                    Some(lexeme)
-                )
-            )
-        }
-    }
-}
-
-impl FroxValue {
-    fn from_literal_value(literal_value: &LiteralValue) -> Self {
-        match literal_value {
-            LiteralValue::Boolean(bool) => FroxValue::Boolean(*bool),
-            LiteralValue::String(string) => FroxValue::String(String::from_str(string).unwrap()),
-            LiteralValue::Number(number) => FroxValue::Number(*number),
-            LiteralValue::Nil => FroxValue::Nil
-        }
-    }
-}
-
-impl<'a> std::fmt::Debug for FroxValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FroxValue::Boolean(bool) => f.write_str(format!("{}", bool).as_str()),
-            FroxValue::Number(number) => f.write_str(format!("{}", number).as_str()),
-            FroxValue::String(string) => f.write_str(["\"", string.as_str(), "\""].concat().as_str()),
-            FroxValue::Function(callable) => f.write_str(format!("fn({})", callable.arity()).as_str()),
-            FroxValue::Clock(_) => f.write_str("clock()"),
-            FroxValue::Nil => f.write_str("nil")
-        }
-    }
-}
-
-impl Display for FroxValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(format!("{:?}", self).as_str())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::expression::LiteralValue;
+
     use super::*;
 
     #[test]

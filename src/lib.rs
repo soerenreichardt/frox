@@ -4,6 +4,7 @@ pub mod parser;
 pub mod scanner;
 pub mod statement;
 pub mod token;
+pub mod value;
 
 mod callable;
 mod context;
@@ -58,6 +59,8 @@ pub trait Materializable<'a, T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::value::FroxValue;
+
     use super::*;
 
     #[test]
@@ -118,7 +121,7 @@ mod tests {
         
         count(3);
         "#;
-        assert_execution_equals(source, "nil123");
+        assert_execution_equals(source, "123");
     }
 
     #[test]

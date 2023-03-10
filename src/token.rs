@@ -58,7 +58,7 @@ pub struct Token {
     line: usize
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Hash, Copy, Clone, Default)]
 pub struct Lexeme {
     pub start: usize,
     pub end: usize

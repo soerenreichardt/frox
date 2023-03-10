@@ -1,6 +1,8 @@
 use std::{time::UNIX_EPOCH, rc::Rc, fmt::Display};
 
-use crate::{interpreter::{FroxValue, Interpreter}, statement::Statement, environment::Environment};
+use crate::interpreter::Interpreter;
+use crate::value::FroxValue;
+use crate::{statement::Statement, environment::Environment};
 use crate::error::{Error, Result};
 
 pub(crate) trait Callable {
@@ -11,7 +13,7 @@ pub(crate) trait Callable {
     fn call<F: FnMut(String) -> ()>(&self, arguments: Vec<FroxValue>, interpreter: &mut Interpreter, print_stream: &mut F) -> Result<FroxValue>;
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, PartialOrd, Clone)]
 pub struct DeclaredFunction {
     pub(crate) name: Rc<str>, 
     pub(crate) parameters: Vec<Rc<str>>,
@@ -47,7 +49,7 @@ impl Display for DeclaredFunction {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, PartialOrd, Clone)]
 pub struct Clock;
 
 impl Callable for Clock {

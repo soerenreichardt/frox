@@ -2,7 +2,7 @@ use std::{fmt::Display, rc::Rc};
 
 use crate::token::Lexeme;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Expression {
     Assigment(Lexeme, Box<MaterializableExpression>),
     Binary(Box<MaterializableExpression>, Box<MaterializableExpression>, BinaryOperator),
@@ -14,13 +14,13 @@ pub enum Expression {
     Variable(Lexeme)
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct MaterializableExpression {
     pub expression: Expression,
     pub lexeme: Lexeme
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum LiteralValue {
     String(Rc<str>),
     Number(f64),
@@ -28,13 +28,13 @@ pub enum LiteralValue {
     Nil
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum UnaryOperator {
     Minus,
     Not
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum BinaryOperator {
     Multiply,
     Divide,
@@ -48,7 +48,7 @@ pub enum BinaryOperator {
     Subtract
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum LogicalOperator {
     And,
     Or

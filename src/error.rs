@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{token::Lexeme, interpreter::FroxValue};
+use crate::{token::Lexeme, value::FroxValue};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -9,7 +9,7 @@ pub enum Error {
     FroxError(String),
     ScannerError(String, usize, usize),
     ParserError(String, Option<Lexeme>),
-    InterpreterError(String, Option<Lexeme>),
+    InterpreterError(String),
     ReturnCall(FroxValue)
 }
 
@@ -18,13 +18,20 @@ pub struct ErrorCollector {
 }
 
 impl Error {
+
+    pub fn format_interpreter_error(error: &Error, lexeme: &Lexeme, source: &str) -> String {
+        match error {
+            Error::InterpreterError(msg) => Self::pretty_print_error(source, msg, &lexeme),
+            _ => panic!("Should only be called on interpreter errors")
+        }
+    }
+
     pub fn format_error(&self, source: &str) -> String {
         match self {
             Self::ScannerError(message, line, position) => Self::format_scanner_error(source, message.as_str(), *line, *position),
             Self::ParserError(message, Some(lexeme)) => Self::pretty_print_error(source, message, lexeme),
             Self::ParserError(_, None) => self.to_string(),
-            Self::InterpreterError(message, Some(lexeme)) => Self::pretty_print_error(source, message, lexeme),
-            Self::InterpreterError(_, None) => self.to_string(),
+            Self::InterpreterError(message) => self.to_string(),
             Self::FroxError(message) => message.to_owned(),
             Self::ReturnCall(value) => self.to_string()
         }

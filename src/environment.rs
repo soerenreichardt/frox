@@ -4,8 +4,8 @@ use std::rc::Rc;
 use crate::error::Error::InterpreterError;
 use crate::error::Result;
 
-use crate::interpreter::FroxValue;
 use crate::token::Lexeme;
+use crate::value::FroxValue;
 
 
 #[derive(Clone)]
@@ -33,7 +33,7 @@ impl<'a> Environment<'a> {
             Some(value) => Ok(value.clone()),
             None => match &self.parent {
                     Some(parent) => parent.borrow().get(name, lexeme),
-                    None => Err(InterpreterError(format!("Undefined variable '{}'.", name), Some(*lexeme)))
+                    None => Err(InterpreterError(format!("Undefined variable '{}'.", name)))
             }
         }
     }
@@ -46,7 +46,7 @@ impl<'a> Environment<'a> {
             },
             None => match &self.parent {
                 Some(parent) => parent.borrow_mut().assign(name, value, lexeme),
-                None => Err(InterpreterError(format!("Undefined variable '{}'.", name), Some(*lexeme)))
+                None => Err(InterpreterError(format!("Undefined variable '{}'.", name)))
             }
         }
     }
