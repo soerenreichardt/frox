@@ -9,18 +9,18 @@ use crate::value::FroxValue;
 
 
 #[derive(Clone)]
-pub(crate) struct Environment<'a> {
+pub(crate) struct Environment {
     values: HashMap<String, FroxValue>,
-    parent: Option<Rc<RefCell<Environment<'a>>>>
+    parent: Option<Rc<RefCell<Environment>>>
 }
 
-impl<'a> Environment<'a> {
+impl Environment {
 
     pub(crate) fn new() -> Self {
         Environment { values: HashMap::new(), parent: None }
     }
 
-    pub(crate) fn new_inner(environment: Rc<RefCell<Environment<'a>>>) -> Self {
+    pub(crate) fn new_inner(environment: Rc<RefCell<Environment>>) -> Self {
         Environment { values: HashMap::new(), parent: Some(environment) }
     }
 
@@ -52,8 +52,8 @@ impl<'a> Environment<'a> {
     }
 }
 
-impl<'a> From<Environment<'a>> for Rc<RefCell<Environment<'a>>> {
-    fn from(env: Environment<'a>) -> Self {
+impl From<Environment> for Rc<RefCell<Environment>> {
+    fn from(env: Environment) -> Self {
         Rc::new(RefCell::new(env))
     }
 }

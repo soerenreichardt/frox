@@ -31,9 +31,9 @@ impl Error {
             Self::ScannerError(message, line, position) => Self::format_scanner_error(source, message.as_str(), *line, *position),
             Self::ParserError(message, Some(lexeme)) => Self::pretty_print_error(source, message, lexeme),
             Self::ParserError(_, None) => self.to_string(),
-            Self::InterpreterError(message) => self.to_string(),
+            Self::InterpreterError(_) => self.to_string(),
             Self::FroxError(message) => message.to_owned(),
-            Self::ReturnCall(value) => self.to_string()
+            Self::ReturnCall(_) => self.to_string()
         }
     }
 

@@ -14,7 +14,7 @@ fn main() {
     }
 }
 
-fn run_file<'a>(path: &str, mut frox: FroxRunner<'a>) {
+fn run_file(path: &str, mut frox: FroxRunner) {
     let source = fs::read_to_string(path)
         .expect("Should have been able to read the file");
     match frox.run(source.into()) {
@@ -23,7 +23,7 @@ fn run_file<'a>(path: &str, mut frox: FroxRunner<'a>) {
     }
 }
 
-fn run_prompt<'a>(mut frox: FroxRunner<'a>) {
+fn run_prompt(mut frox: FroxRunner) {
     let stdin = io::stdin();
 
     loop {

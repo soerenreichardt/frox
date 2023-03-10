@@ -3,14 +3,14 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue};
 use crate::error::Result;
 
-pub struct Interpreter<'a> {
+pub struct Interpreter {
     context: Context,
-    environment: Rc<RefCell<Environment<'a>>>,
-    pub(crate) globals: Rc<RefCell<Environment<'a>>>
+    environment: Rc<RefCell<Environment>>,
+    pub(crate) globals: Rc<RefCell<Environment>>
 }
 
-impl<'a> Interpreter<'a> {
-    pub(crate) fn new(source: Rc<str>, environment: Rc<RefCell<Environment<'a>>>) -> Self {
+impl Interpreter {
+    pub(crate) fn new(source: Rc<str>, environment: Rc<RefCell<Environment>>) -> Self {
         environment.borrow_mut().define("clock".to_string(), FroxValue::Clock(Clock {}));
         Interpreter { context: Context::new(source), environment: environment.clone(), globals: environment.clone() }
     }
@@ -51,7 +51,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    pub(crate) fn execute_block<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement>, nested_ennvironment: Rc<RefCell<Environment<'a>>>, print_stream: &mut F) -> Result<()> {
+    pub(crate) fn execute_block<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement>, nested_ennvironment: Rc<RefCell<Environment>>, print_stream: &mut F) -> Result<()> {
         let previous_environment = std::mem::replace(&mut self.environment, nested_ennvironment);
         let mut execute_statements = || -> Result<()> {
             for statement in statements {
@@ -83,7 +83,7 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    fn execute_function_declaration<F: FnMut(String) -> ()>(&mut self, name: &Lexeme, parameters: &[Lexeme], body: &[Statement], print_stream: F) -> Result<()> {
+    fn execute_function_declaration<F: FnMut(String) -> ()>(&mut self, name: &Lexeme, parameters: &[Lexeme], body: &[Statement], _print_stream: F) -> Result<()> {
         let name: Rc<str> = name.materialize(&self.context).into();
         let parameters: Vec<Rc<str>> = parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>();
         let body: Rc<Vec<Statement>> = Rc::new(body.to_vec());

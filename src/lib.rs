@@ -22,11 +22,11 @@ use crate::interpreter::*;
 use crate::parser::*;
 use crate::scanner::*;
 
-pub struct FroxRunner<'a> {
-    environment: Rc<RefCell<Environment<'a>>>,
+pub struct FroxRunner {
+    environment: Rc<RefCell<Environment>>,
 }
 
-impl<'a> FroxRunner<'a> {
+impl FroxRunner {
     pub fn new() -> Self {
         FroxRunner {
             environment: Environment::new().into(),
