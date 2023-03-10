@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::{time::UNIX_EPOCH, rc::Rc, fmt::Display};
 
 use crate::interpreter::Interpreter;
@@ -13,11 +14,12 @@ pub(crate) trait Callable {
     fn call<F: FnMut(String) -> ()>(&self, arguments: Vec<FroxValue>, interpreter: &mut Interpreter, print_stream: &mut F) -> Result<FroxValue>;
 }
 
-#[derive(PartialEq, PartialOrd, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct DeclaredFunction {
     pub(crate) name: Rc<str>, 
     pub(crate) parameters: Vec<Rc<str>>,
-    pub(crate) body: Rc<Vec<Statement>>
+    pub(crate) body: Rc<Vec<Statement>>,
+    pub(crate) closure: Rc<RefCell<Environment>>
 }
 
 impl Callable for DeclaredFunction {
@@ -30,7 +32,7 @@ impl Callable for DeclaredFunction {
     }
 
     fn call<F: FnMut(String) -> ()>(&self, arguments: Vec<FroxValue>, interpreter: &mut Interpreter, print_stream: &mut F) -> Result<FroxValue> {
-        let mut environment = Environment::new_inner(interpreter.globals.clone());
+        let mut environment = Environment::new_inner(self.closure.clone());
         for (parameter, argument) in self.parameters.iter().zip(arguments.iter()) {
             environment.define(parameter.to_string(), argument.clone());
         }

@@ -8,7 +8,7 @@ use crate::token::Lexeme;
 use crate::value::FroxValue;
 
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct Environment {
     values: HashMap<String, FroxValue>,
     parent: Option<Rc<RefCell<Environment>>>

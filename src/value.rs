@@ -5,7 +5,7 @@ use crate::callable::{DeclaredFunction, Clock, Callable};
 use crate::expression::LiteralValue;
 use crate::error::{Result, Error};
 
-#[derive(PartialEq, PartialOrd, Clone)]
+#[derive(PartialEq, Clone)]
 pub enum FroxValue {
     Number(f64),
     String(String),

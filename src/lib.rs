@@ -134,6 +134,23 @@ mod tests {
         assert_execution_equals(source, "\"Hi, Dear Reader!\"");
     }
 
+    #[test]
+    fn should_run_closures() {
+        let source = r#"
+        fun makeCounter() { var i = 0;
+            fun count() {
+                i = i + 1;
+                print i; 
+            }
+            return count; 
+        }
+        var counter = makeCounter(); 
+        counter(); // "1". 
+        counter(); // "2".
+        "#;
+        assert_execution_equals(source, "12")
+    }
+
     fn assert_execution_equals(source: &str, expected: &str) {
         let mut buffer = String::new();
         FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())).unwrap();

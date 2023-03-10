@@ -88,7 +88,7 @@ impl Interpreter {
         let parameters: Vec<Rc<str>> = parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>();
         let body: Rc<Vec<Statement>> = Rc::new(body.to_vec());
 
-        let declared_function = DeclaredFunction { name: name.clone(), parameters, body };
+        let declared_function = DeclaredFunction { name: name.clone(), parameters, body, closure: self.environment.clone() };
         self.environment.borrow_mut().define(name.to_string(), FroxValue::Function(declared_function));
         Ok(())
     }
