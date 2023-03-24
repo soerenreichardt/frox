@@ -201,6 +201,16 @@ mod tests {
         assert_execution_equals(source, "Foo");
     }
 
+    #[test]
+    fn should_print_instance() {
+        let source = r#"
+        class Bagel {}
+        var bagel = Bagel();
+        print bagel;
+        "#;
+        assert_execution_equals(source, "Bagel instance");
+    }
+
     fn assert_execution_equals(source: &str, expected: &str) {
         let mut buffer = String::new();
         match FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())) {

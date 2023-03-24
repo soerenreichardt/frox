@@ -111,7 +111,7 @@ impl<'a> Interpreter<'a> {
         Err(Error::ReturnCall(evaluated_value))
     }
 
-    fn execute_class(&mut self, lexeme: &Lexeme, methods: &[Statement]) -> Result<()> {
+    fn execute_class(&mut self, lexeme: &Lexeme, _methods: &[Statement]) -> Result<()> {
         let name: Rc<str> = lexeme.materialize(&self.context).into();
         self.environment.borrow_mut().define(name.to_string(), FroxValue::Nil);
         let class = Class { name: name.clone() };
@@ -205,6 +205,7 @@ impl<'a> Interpreter<'a> {
                 }
                 callable.call(evaluated_arguments, self, print_stream)
             },
+            FroxValue::Class(class) => Ok(FroxValue::Instance(class)),
             _ => Err(Error::InterpreterError("Invalid invocation target".to_string()))
         }
     }

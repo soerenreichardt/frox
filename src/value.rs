@@ -14,6 +14,7 @@ pub enum FroxValue {
     Function(DeclaredFunction),
     Clock(Clock),
     Class(Class),
+    Instance(Class),
     Nil
 }
 
@@ -94,6 +95,7 @@ impl<'a> std::fmt::Debug for FroxValue {
             FroxValue::Function(callable) => f.write_str(format!("fn({})", callable.arity()).as_str()),
             FroxValue::Clock(_) => f.write_str("clock()"),
             FroxValue::Class(class) => f.write_str(&class.name),
+            FroxValue::Instance(class) => f.write_str(format!("{} instance", class.name).as_str()),
             FroxValue::Nil => f.write_str("nil")
         }
     }
