@@ -9,5 +9,6 @@ pub enum Statement {
     If(MaterializableExpression, Box<Statement>, Option<Box<Statement>>),
     While(MaterializableExpression, Box<Statement>),
     Function(Option<Lexeme>, Vec<Lexeme>, Vec<Statement>),
-    Return(Option<MaterializableExpression>)
+    Return(Option<MaterializableExpression>),
+    Class(Lexeme, Vec<Statement>)
 }

@@ -53,7 +53,8 @@ impl<'a> Interpreter<'a> {
             Statement::If(condition, then_branch, else_branch) => self.execute_condition(condition, then_branch, else_branch, print_stream),
             Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream),
             Statement::Function(name, parameters, body) => self.execute_function_declaration(name, parameters, body, print_stream),
-            Statement::Return(value) => self.execute_return(value, print_stream)
+            Statement::Return(value) => self.execute_return(value, print_stream),
+            Statement::Class(_, _) => todo!()
         }
     }
 

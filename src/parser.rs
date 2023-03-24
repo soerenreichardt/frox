@@ -18,6 +18,12 @@ struct TokenIterator {
     tokens: IntoIter<Token>,
 }
 
+enum FunctionKind {
+    Function,
+    Method,
+    Lambda
+}
+
 impl Default for TokenIterator {
     fn default() -> Self {
         Self { tokens: Vec::new().into_iter() }
@@ -62,7 +68,8 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Statement> {
         match self.token_iterator.peek() {
-            Some(Token { token_type: TokenType::Fun, ..}) => self.function(false),
+            Some(Token { token_type: TokenType::Class, ..}) => self.class_declaration(),
+            Some(Token { token_type: TokenType::Fun, ..}) => self.function_declaration(FunctionKind::Function),
             Some(Token { token_type: TokenType::Var, .. }) => self.variable_declaration(),
             _ => self.statement()
         }
@@ -70,13 +77,35 @@ impl Parser {
         // todo: synchronize
     }
 
-    fn function(&mut self, lambda: bool) -> Result<Statement> {
-        
-        let mut name = None;
-        if !lambda {
-            self.token_iterator.next();
-            name = Some(self.consume(&TokenType::Identifier)?.lexeme);
+    fn class_declaration(&mut self) -> Result<Statement> {
+        self.token_iterator.next();
+        let name = self.consume(&TokenType::Identifier)?;
+        self.consume(&TokenType::LeftBrace)?;
+
+        let mut methods = Vec::new();
+        loop {
+            match self.token_iterator.peek().map(|token| token.token_type) {
+                Some(TokenType::RightBrace) | None => break,
+                _ => methods.push(self.function_declaration(FunctionKind::Method)?)
+            }
         }
+
+        self.consume(&TokenType::RightBrace)?;
+        
+        Ok(Statement::Class(name.lexeme, methods))
+    }
+
+    fn function_declaration(&mut self, function_kind: FunctionKind) -> Result<Statement> {
+        let name = match function_kind {
+            FunctionKind::Lambda => None,
+            FunctionKind::Function => {
+                self.token_iterator.next();
+                Some(self.consume(&TokenType::Identifier)?.lexeme)
+            },
+            FunctionKind::Method => {
+                Some(self.consume(&TokenType::Identifier)?.lexeme)
+            }
+        };
 
         self.consume(&TokenType::LeftParen)?;
         let mut parameters = Vec::new();
@@ -470,7 +499,7 @@ impl Parser {
     }
 
     fn lambda(&mut self, lexeme: Lexeme) -> Result<MaterializableExpression> {
-        Ok(Expression::Lambda(Box::new(self.function(true)?)).wrap(lexeme))
+        Ok(Expression::Lambda(Box::new(self.function_declaration(FunctionKind::Lambda)?)).wrap(lexeme))
     }
 
     fn grouping_expression(&mut self, lexeme: &Lexeme) -> Result<MaterializableExpression> {
@@ -657,6 +686,37 @@ mod tests {
                         Box::new(Expression::Literal(LiteralValue::Number(2.0)).wrap(Lexeme::new(6, 7)))
                     ]
                 ).wrap(Lexeme::new(0, 8))
+            ),
+            *statements.get(0).unwrap()
+        )
+    }
+
+    #[test]
+    fn should_parse_class() {
+        let tokens = vec![
+            Token::new(TokenType::Class, (0, 5), 1),
+            Token::new(TokenType::Identifier, (6, 9), 1),
+            Token::new(TokenType::LeftBrace, (10, 11), 1),
+            Token::new(TokenType::Identifier, (12, 13), 1),
+            Token::new(TokenType::LeftParen, (13, 14), 1),
+            Token::new(TokenType::RightParen, (14, 15), 1),
+            Token::new(TokenType::LeftBrace, (16, 17), 1),
+            Token::new(TokenType::Print, (18, 23), 1),
+            Token::new(TokenType::Number, (24, 25), 1),
+            Token::new(TokenType::Semicolon, (25, 26), 1),
+            Token::new(TokenType::RightBrace, (27, 28), 1),
+            Token::new(TokenType::RightBrace, (29, 30), 1),
+        ];
+        let mut parser = Parser::new("class foo { a() { print 0; } }".into());
+        let statements = parser.parse(tokens).unwrap();
+        assert_eq!(
+            Statement::Class(
+                Lexeme::new(6, 9), 
+                vec![
+                    Statement::Function(Some(Lexeme::new(12, 13)), Vec::new(), vec![
+                        Statement::Print( Expression::Literal(LiteralValue::Number(0.0)).wrap(Lexeme::new(24, 25)) )
+                    ])
+                ]
             ),
             *statements.get(0).unwrap()
         )

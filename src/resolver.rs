@@ -90,7 +90,8 @@ impl<'a> Resolver<'a> {
             Statement::While(condition, body) => {
                 self.resolve_expression(condition)?;
                 self.resolve_statement(body)?;
-            }
+            },
+            Statement::Class(_, _) => todo!()
         };
         Ok(())
     }
