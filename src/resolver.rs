@@ -2,23 +2,23 @@ use std::{rc::Rc, collections::HashMap};
 
 use crate::{statement::Statement, token::{Lexeme}, expression::{MaterializableExpression, Expression}, error::{Result, Error}, context::Context, Materializable};
 
-pub(crate) struct Resolver {
+pub(crate) struct Resolver<'a> {
     scopes: Vec<HashMap<String, bool>>,
     context: Context,
-    local_variables: LocalVariables
+    local_variables: LocalVariables<'a>
 }
 
 #[derive(Default, Debug)]
-pub(crate) struct LocalVariables {
-    locals: HashMap<Lexeme, usize>
+pub(crate) struct LocalVariables<'a> {
+    locals: HashMap<&'a Lexeme, usize>
 }
 
-impl Resolver {
+impl<'a> Resolver<'a> {
     pub(crate) fn new(source: Rc<str>) -> Self {
         Resolver { scopes: Vec::new(), context: Context::new(source), local_variables: LocalVariables::default() }
     }
 
-    pub(crate) fn resolve(&mut self, statements: &[Statement]) -> Result<&LocalVariables> {
+    pub(crate) fn resolve(&mut self, statements: &'a [Statement]) -> Result<&LocalVariables> {
         for statement in statements {
             match self.resolve_statement(statement) {
                 Err(error) => self.context.collect_error(error),
@@ -28,7 +28,7 @@ impl Resolver {
         self.context.flush_errors(&self.local_variables)
     }
 
-    fn resolve_statement(&mut self, statement: &Statement) -> Result<()> {
+    fn resolve_statement(&mut self, statement: &'a Statement) -> Result<()> {
         match statement {
             Statement::Block(inner_statements) => {
                 self.begin_scope();
@@ -77,7 +77,7 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_expression(&mut self, MaterializableExpression { expression, lexeme: _ }: &MaterializableExpression) -> Result<()> {
+    fn resolve_expression(&mut self, MaterializableExpression { expression, lexeme: _ }: &'a MaterializableExpression) -> Result<()> {
         match expression {
             Expression::Variable(lexeme) => {
                 let name = lexeme.materialize(&self.context);
@@ -112,10 +112,10 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_local(&mut self, name: String, lexeme: &Lexeme) -> Result<()> {
+    fn resolve_local(&mut self, name: String, lexeme: &'a Lexeme) -> Result<()> {
         for (i, scope) in self.scopes.iter().enumerate().rev() {
             if scope.contains_key(&name) {
-                self.local_variables.insert(lexeme.clone(), self.scopes.len() - 1 - i);
+                self.local_variables.insert(lexeme, self.scopes.len() - 1 - i);
                 return Ok(())
             }
         }
@@ -153,8 +153,8 @@ impl Resolver {
     }
 }
 
-impl LocalVariables {
-    pub(crate) fn insert(&mut self, lexeme: Lexeme, distance: usize) {
+impl<'a> LocalVariables<'a> {
+    pub(crate) fn insert(&mut self, lexeme: &'a Lexeme, distance: usize) {
         self.locals.insert(lexeme, distance);
     }
 

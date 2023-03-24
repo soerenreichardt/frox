@@ -142,7 +142,7 @@ impl Display for Error {
             Self::ScannerError(message, ..) => f.write_str(message),            
             Self::ParserError(message, ..) => f.write_str(message),
             Self::InterpreterError(message, ..) => f.write_str(message),
-            Self::ResolverError(message, lexeme) => f.write_str(message),
+            Self::ResolverError(message, _) => f.write_str(message),
             Self::ReturnCall(value) => f.write_str(format!("return {:?}", value).as_str())
         }
     }

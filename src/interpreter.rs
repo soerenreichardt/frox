@@ -7,7 +7,7 @@ pub struct Interpreter<'a> {
     context: Context,
     environment: Rc<RefCell<Environment>>,
     globals: Rc<RefCell<Environment>>,
-    resolved_variables: &'a LocalVariables
+    resolved_variables: &'a LocalVariables<'a>
 }
 
 impl<'a> Interpreter<'a> {
