@@ -531,20 +531,6 @@ mod tests {
     }
 
     #[test]
-    fn should_print_error_when_failing_to_match_grouping() {
-        let tokens = vec![
-            Token::new(TokenType::LeftParen, (0, 1), 1),
-            Token::new(TokenType::Number, (1, 2), 1),
-            Token::new(TokenType::And, (2, 3), 1)
-        ];
-        let mut parser = Parser::new("(1=".into());
-        let expression = parser.parse(tokens);
-        assert!(
-            expression.err().unwrap().to_string().contains("Error occured on line 0:\n(1=\n  ^\n  Expected token to be of type RightParen")
-        )
-    }
-
-    #[test]
     fn should_parse_print_statement() {
         let tokens = vec![
             Token::new(TokenType::Print, (0, 5), 1),

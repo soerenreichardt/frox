@@ -10,7 +10,7 @@ pub enum Error {
     ScannerError(String, usize, usize),
     ParserError(String, Option<Lexeme>),
     InterpreterError(String),
-    ResolverError(String, Lexeme),
+    ResolverError(String, Option<Lexeme>),
     ReturnCall(FroxValue)
 }
 
@@ -35,7 +35,8 @@ impl Error {
             Self::ParserError(_, None) => self.to_string(),
             Self::InterpreterError(_) => self.to_string(),
             Self::FroxError(message) => message.to_owned(),
-            Self::ResolverError(message, lexeme) => Self::pretty_print_error(source, message, lexeme),
+            Self::ResolverError(message, Some(lexeme)) => Self::pretty_print_error(source, message, lexeme),
+            Self::ResolverError(_, None) => self.to_string(),
             Self::ReturnCall(_) => self.to_string()
         }
     }

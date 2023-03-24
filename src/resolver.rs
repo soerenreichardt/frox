@@ -5,7 +5,8 @@ use crate::{statement::Statement, token::{Lexeme}, expression::{MaterializableEx
 pub(crate) struct Resolver<'a> {
     scopes: Vec<HashMap<String, bool>>,
     context: Context,
-    local_variables: LocalVariables<'a>
+    local_variables: LocalVariables<'a>,
+    current_function: &'a FunctionType
 }
 
 #[derive(Default, Debug)]
@@ -13,9 +14,19 @@ pub(crate) struct LocalVariables<'a> {
     locals: HashMap<&'a Lexeme, usize>
 }
 
+enum FunctionType {
+    None,
+    Function
+}
+
 impl<'a> Resolver<'a> {
     pub(crate) fn new(source: Rc<str>) -> Self {
-        Resolver { scopes: Vec::new(), context: Context::new(source), local_variables: LocalVariables::default() }
+        Resolver { 
+            scopes: Vec::new(), 
+            context: Context::new(source), 
+            local_variables: LocalVariables::default(), 
+            current_function: &FunctionType::None 
+        }
     }
 
     pub(crate) fn resolve(&mut self, statements: &'a [Statement]) -> Result<&LocalVariables> {
@@ -36,7 +47,7 @@ impl<'a> Resolver<'a> {
                 self.end_scope();
             },
             Statement::Var(name, initializer) => {
-                self.declare(name);
+                self.declare(name)?;
                 if let Some(initializer) = initializer {
                     self.resolve_expression(initializer)?;
                 }
@@ -51,21 +62,28 @@ impl<'a> Resolver<'a> {
                 }
             },
             Statement::Function(name, parameters, body) => {
-                name.map(|name| {
-                    self.declare(&name);
+                if let Some(name) = name {
+                    self.declare(&name)?;
                     self.define(&name);
-                });
+                }
+
+                let enclosing_function = self.current_function;
+                self.current_function = &FunctionType::Function;
+
                 self.begin_scope();
                 for parameter in parameters.iter() {
-                    self.declare(parameter);
+                    self.declare(parameter)?;
                     self.define(parameter);
                 }
                 self.resolve(body)?;
                 self.end_scope();
+
+                self.current_function = enclosing_function;
             },
             Statement::Print(expression) => self.resolve_expression(expression)?,
-            Statement::Return(expression) => {
-                if let Some(expression) = expression {
+            Statement::Return(expression) => match self.current_function {
+                FunctionType::None => return Err(Error::ResolverError("Can't return from top-level code".to_string(), None)),
+                _ => if let Some(expression) = expression {
                     self.resolve_expression(expression)?;
                 }
             },
@@ -82,7 +100,7 @@ impl<'a> Resolver<'a> {
             Expression::Variable(lexeme) => {
                 let name = lexeme.materialize(&self.context);
                 if !self.scopes.is_empty() && self.scopes.last().expect("No values present").get(name) == Some(&false) {
-                    return Err(Error::ResolverError("Can't read local variable in its own initializer".to_string(), lexeme.clone()))
+                    return Err(Error::ResolverError("Can't read local variable in its own initializer".to_string(), Some(*lexeme)))
                 }
                 self.resolve_local(name.to_string(), lexeme)?;
             },
@@ -130,15 +148,18 @@ impl<'a> Resolver<'a> {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, lexeme: &Lexeme) {
+    fn declare(&mut self, lexeme: &Lexeme) -> Result<()> {
         if self.scopes.is_empty() {
-            return;
+            return Ok(());
         }
 
-        let name = lexeme.materialize(&self.context);
-        self.scopes
-            .last_mut().expect("No values present")
-            .insert(name.to_string(), false);
+        let name = lexeme.materialize(&self.context).to_string();
+        let scope = self.scopes.last_mut().expect("No values present");
+        if scope.contains_key(&name) {
+            return Err(Error::ResolverError(format!("A variable with name `{}` already exists in this scope", name), Some(*lexeme)));
+        }
+        scope.insert(name, false);
+        Ok(())
     }
 
     fn define(&mut self, lexeme: &Lexeme) {

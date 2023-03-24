@@ -7,7 +7,7 @@ pub struct Interpreter<'a> {
     context: Context,
     environment: Rc<RefCell<Environment>>,
     globals: Rc<RefCell<Environment>>,
-    resolved_variables: &'a LocalVariables<'a>
+    local_variables: &'a LocalVariables<'a>
 }
 
 impl<'a> Interpreter<'a> {
@@ -17,7 +17,7 @@ impl<'a> Interpreter<'a> {
             context: Context::new(source), 
             environment: environment.clone(), 
             globals: environment.clone(),
-            resolved_variables
+            local_variables: resolved_variables
         }
     }
 
@@ -148,7 +148,7 @@ impl<'a> Interpreter<'a> {
 
     fn variable(&mut self, lexeme: &Lexeme) -> Result<FroxValue> {
         let name = lexeme.materialize(&self.context).to_string();
-        match self.resolved_variables.get(lexeme.clone()) {
+        match self.local_variables.get(lexeme.clone()) {
             Some(distance) => Environment::get_at(self.environment.clone(), *distance, name),
             None => self.globals.borrow().get(name)
         }
@@ -157,9 +157,9 @@ impl<'a> Interpreter<'a> {
     fn assignment<F: FnMut(String) -> ()>(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
         let value = self.evaluate(&expression, print_stream)?;
         let name = lexeme.materialize(&self.context).to_string();
-        println!("{:?}", self.resolved_variables);
+        println!("{:?}", self.local_variables);
         println!("assign {:?}", lexeme);
-        match self.resolved_variables.get(lexeme.clone()) {
+        match self.local_variables.get(lexeme.clone()) {
             Some(distance) => Environment::assign_at(self.environment.clone(), *distance, name, value),
             None => self.globals.borrow_mut().assign(name, value, lexeme)
         }
