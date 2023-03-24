@@ -2,6 +2,7 @@ use std::fmt::{Formatter, Display};
 use std::str::FromStr;
 
 use crate::callable::{DeclaredFunction, Clock, Callable};
+use crate::class::Class;
 use crate::expression::LiteralValue;
 use crate::error::{Result, Error};
 
@@ -12,6 +13,7 @@ pub enum FroxValue {
     Boolean(bool),
     Function(DeclaredFunction),
     Clock(Clock),
+    Class(Class),
     Nil
 }
 
@@ -91,6 +93,7 @@ impl<'a> std::fmt::Debug for FroxValue {
             FroxValue::String(string) => f.write_str(["\"", string.as_str(), "\""].concat().as_str()),
             FroxValue::Function(callable) => f.write_str(format!("fn({})", callable.arity()).as_str()),
             FroxValue::Clock(_) => f.write_str("clock()"),
+            FroxValue::Class(class) => f.write_str(&class.name),
             FroxValue::Nil => f.write_str("nil")
         }
     }

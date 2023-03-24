@@ -91,7 +91,10 @@ impl<'a> Resolver<'a> {
                 self.resolve_expression(condition)?;
                 self.resolve_statement(body)?;
             },
-            Statement::Class(_, _) => todo!()
+            Statement::Class(lexeme, _) => {
+                self.declare(lexeme)?;
+                self.define(lexeme);
+            }
         };
         Ok(())
     }

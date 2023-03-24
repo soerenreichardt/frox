@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::RefCell};
 
-use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue, resolver::LocalVariables};
+use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue, resolver::LocalVariables, class::Class};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
@@ -54,7 +54,7 @@ impl<'a> Interpreter<'a> {
             Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream),
             Statement::Function(name, parameters, body) => self.execute_function_declaration(name, parameters, body, print_stream),
             Statement::Return(value) => self.execute_return(value, print_stream),
-            Statement::Class(_, _) => todo!()
+            Statement::Class(lexeme, methods) => self.execute_class(lexeme, methods)
         }
     }
 
@@ -109,6 +109,14 @@ impl<'a> Interpreter<'a> {
             _ => FroxValue::Nil
         };
         Err(Error::ReturnCall(evaluated_value))
+    }
+
+    fn execute_class(&mut self, lexeme: &Lexeme, methods: &[Statement]) -> Result<()> {
+        let name: Rc<str> = lexeme.materialize(&self.context).into();
+        self.environment.borrow_mut().define(name.to_string(), FroxValue::Nil);
+        let class = Class { name: name.clone() };
+        self.environment.borrow_mut().assign(name.to_string(), FroxValue::Class(class), lexeme)?;
+        Ok(())
     }
 
     pub(crate) fn evaluate<F: FnMut(String) -> ()>(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression, print_stream: &mut F) -> Result<FroxValue> {

@@ -11,6 +11,7 @@ mod context;
 mod environment;
 mod error;
 mod resolver;
+mod class;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -185,6 +186,19 @@ mod tests {
         }
         "#;
         assert_execution_equals(source, "\"global\"\"global\"");
+    }
+
+    #[test]
+    fn should_print_class() {
+        let source = r#"
+        class Foo {
+            bar() {
+                print "baz";
+            }
+        }
+        print Foo;
+        "#;
+        assert_execution_equals(source, "Foo");
     }
 
     fn assert_execution_equals(source: &str, expected: &str) {
