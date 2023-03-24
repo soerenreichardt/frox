@@ -10,6 +10,7 @@ pub enum Error {
     ScannerError(String, usize, usize),
     ParserError(String, Option<Lexeme>),
     InterpreterError(String),
+    ResolverError(String, Lexeme),
     ReturnCall(FroxValue)
 }
 
@@ -22,6 +23,7 @@ impl Error {
     pub fn format_interpreter_error(error: &Error, lexeme: &Lexeme, source: &str) -> String {
         match error {
             Error::InterpreterError(msg) => Self::pretty_print_error(source, msg, &lexeme),
+            Error::FroxError(msg) => Self::pretty_print_error(source, msg, &lexeme),
             _ => panic!("Should only be called on interpreter errors")
         }
     }
@@ -33,6 +35,7 @@ impl Error {
             Self::ParserError(_, None) => self.to_string(),
             Self::InterpreterError(_) => self.to_string(),
             Self::FroxError(message) => message.to_owned(),
+            Self::ResolverError(message, lexeme) => Self::pretty_print_error(source, message, lexeme),
             Self::ReturnCall(_) => self.to_string()
         }
     }
@@ -138,7 +141,8 @@ impl Display for Error {
             Self::FroxError(message) => f.write_str(message),            
             Self::ScannerError(message, ..) => f.write_str(message),            
             Self::ParserError(message, ..) => f.write_str(message),
-            Self::InterpreterError(message, ..) => f.write_str(message)         ,
+            Self::InterpreterError(message, ..) => f.write_str(message),
+            Self::ResolverError(message, lexeme) => f.write_str(message),
             Self::ReturnCall(value) => f.write_str(format!("return {:?}", value).as_str())
         }
     }

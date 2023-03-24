@@ -28,14 +28,18 @@ impl Environment {
         self.values.insert(name, value);
     }
 
-    pub(crate) fn get(&self, name: String, lexeme: &Lexeme) -> Result<FroxValue> {
+    pub(crate) fn get(&self, name: String) -> Result<FroxValue> {
         match self.values.get(&name) {
             Some(value) => Ok(value.clone()),
             None => match &self.parent {
-                    Some(parent) => parent.borrow().get(name, lexeme),
+                    Some(parent) => parent.borrow().get(name),
                     None => Err(InterpreterError(format!("Undefined variable '{}'.", name)))
             }
         }
+    }
+
+    pub(crate) fn get_at(environment: Rc<RefCell<Environment>>, distance: usize, name: String) -> Result<FroxValue> {
+        Environment::ancestor(environment, distance).borrow().get(name)
     }
 
     pub(crate) fn assign(&mut self, name: String, value: FroxValue, lexeme: &Lexeme) -> Result<FroxValue> {
@@ -48,6 +52,22 @@ impl Environment {
                 Some(parent) => parent.borrow_mut().assign(name, value, lexeme),
                 None => Err(InterpreterError(format!("Undefined variable '{}'.", name)))
             }
+        }
+    }
+
+    pub(crate) fn assign_at(environment: Rc<RefCell<Environment>>, distance: usize, name: String, value: FroxValue) -> Result<FroxValue> {
+        Environment::ancestor(environment, distance).borrow_mut().values.insert(name, value.clone());
+        Ok(value.clone())
+    }
+
+    fn ancestor(env: Rc<RefCell<Environment>>, distance: usize) -> Rc<RefCell<Environment>> {
+        if distance == 0 {
+            return env;
+        }
+
+        match env.borrow().parent.clone() {
+            Some(parent) => Environment::ancestor(parent, distance - 1),
+            None => panic!()
         }
     }
 }

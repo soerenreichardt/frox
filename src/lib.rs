@@ -10,12 +10,14 @@ mod callable;
 mod context;
 mod environment;
 mod error;
+mod resolver;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use environment::Environment;
 use error::Result;
+use resolver::Resolver;
 
 use crate::context::*;
 use crate::interpreter::*;
@@ -48,7 +50,10 @@ impl FroxRunner {
         let mut parser = Parser::new(source.clone());
         let statements = parser.parse(tokens)?;
 
-        let mut interpreter = Interpreter::new(source.clone(), self.environment.clone());
+        let mut resolver = Resolver::new(source.clone());
+        let resolved_variables = resolver.resolve(&statements)?;
+
+        let mut interpreter = Interpreter::new(source.clone(), self.environment.clone(), resolved_variables);
         interpreter.interpret(&statements, &mut print_stream)
     }
 }
@@ -164,6 +169,22 @@ mod tests {
         });
         "#;
         assert_execution_equals(source, "123")
+    }
+
+    #[test]
+    fn should_resolve_with_correct_environment() {
+        let source = r#"
+        var a = "global";
+        {
+            fun showA() {
+                print a; 
+            }
+            showA();
+            var a = "block"; 
+            showA();
+        }
+        "#;
+        assert_execution_equals(source, "\"global\"\"global\"");
     }
 
     fn assert_execution_equals(source: &str, expected: &str) {

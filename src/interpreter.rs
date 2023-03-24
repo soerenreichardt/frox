@@ -1,18 +1,24 @@
 use std::{rc::Rc, cell::RefCell};
 
-use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue};
+use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue, resolver::LocalVariables};
 use crate::error::Result;
 
-pub struct Interpreter {
+pub struct Interpreter<'a> {
     context: Context,
     environment: Rc<RefCell<Environment>>,
-    pub(crate) globals: Rc<RefCell<Environment>>
+    globals: Rc<RefCell<Environment>>,
+    resolved_variables: &'a LocalVariables
 }
 
-impl Interpreter {
-    pub(crate) fn new(source: Rc<str>, environment: Rc<RefCell<Environment>>) -> Self {
+impl<'a> Interpreter<'a> {
+    pub(crate) fn new(source: Rc<str>, environment: Rc<RefCell<Environment>>, resolved_variables: &'a LocalVariables) -> Self {
         environment.borrow_mut().define("clock".to_string(), FroxValue::Clock(Clock {}));
-        Interpreter { context: Context::new(source), environment: environment.clone(), globals: environment.clone() }
+        Interpreter { 
+            context: Context::new(source), 
+            environment: environment.clone(), 
+            globals: environment.clone(),
+            resolved_variables
+        }
     }
 
     pub(crate) fn interpret<F: FnMut(String) -> ()>(&mut self, statements: &Vec<Statement>, print_stream: &mut F) -> Result<()> {
@@ -132,7 +138,7 @@ impl Interpreter {
                 }
             },
             Expression::Literal(literal_value) => Ok(FroxValue::from_literal_value(literal_value)),
-            Expression::Variable(lexeme) => self.environment.borrow().get(lexeme.materialize(&self.context).to_string(), lexeme),
+            Expression::Variable(lexeme) => self.variable(lexeme),
             Expression::Assigment(lexeme, expression) => self.assignment(expression, lexeme, print_stream),
             Expression::Logical(left, right, operator) => self.logical(left, right, operator, print_stream),
             Expression::Call(callee, _, arguments) => self.call(callee, arguments, print_stream),
@@ -140,9 +146,24 @@ impl Interpreter {
         }.map_err(|error| Error::FroxError(Error::format_interpreter_error(&error, lexeme, &self.context.source)))
     }
 
+    fn variable(&mut self, lexeme: &Lexeme) -> Result<FroxValue> {
+        let name = lexeme.materialize(&self.context).to_string();
+        match self.resolved_variables.get(lexeme.clone()) {
+            Some(distance) => Environment::get_at(self.environment.clone(), *distance, name),
+            None => self.globals.borrow().get(name)
+        }
+    }
+
     fn assignment<F: FnMut(String) -> ()>(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
         let value = self.evaluate(&expression, print_stream)?;
-        self.environment.borrow_mut().assign(lexeme.materialize(&self.context).to_string(), value, lexeme)
+        let name = lexeme.materialize(&self.context).to_string();
+        println!("{:?}", self.resolved_variables);
+        println!("assign {:?}", lexeme);
+        match self.resolved_variables.get(lexeme.clone()) {
+            Some(distance) => Environment::assign_at(self.environment.clone(), *distance, name, value),
+            None => self.globals.borrow_mut().assign(name, value, lexeme)
+        }
+        
     }
 
     fn logical<F: FnMut(String) -> ()>(&mut self, lhs: &MaterializableExpression, rhs: &MaterializableExpression, operator: &LogicalOperator, print_stream: &mut F) -> Result<FroxValue> {
@@ -186,6 +207,12 @@ impl Interpreter {
         } else {
             return Err(Error::InterpreterError("Expected lambda".to_string()));
         }
+    }
+}
+
+impl<'a> Into<Rc<RefCell<Interpreter<'a>>>> for Interpreter<'a> {
+    fn into(self) -> Rc<RefCell<Interpreter<'a>>> {
+        Rc::new(RefCell::new(self))
     }
 }
 
@@ -245,7 +272,8 @@ mod tests {
             BinaryOperator::Add
         ).wrap_default();
         let environment = Environment::new();
-        let mut interpreter = Interpreter::new("".into(), environment.into());
+        let resolved_variables = LocalVariables::default();
+        let mut interpreter = Interpreter::new("".into(), environment.into(), &resolved_variables);
         let value = match interpreter.evaluate(&expression, &mut |_| ()) {
             Ok(FroxValue::String(value)) => value,
             _ => panic!("{:?}", expression)
@@ -261,7 +289,8 @@ mod tests {
             operator
         ).wrap_default();
         let environment = Environment::new();
-        let mut interpreter = Interpreter::new("".into(), environment.into());
+        let resolved_variables = LocalVariables::default();
+        let mut interpreter = Interpreter::new("".into(), environment.into(), &resolved_variables);
         match interpreter.evaluate(&expression, &mut |_| ()) {
             Ok(FroxValue::Number(value)) => value,
             _ => panic!("{:?}", expression)
@@ -275,7 +304,8 @@ mod tests {
             operator
         ).wrap_default();
         let environment = Environment::new();
-        let mut interpreter = Interpreter::new("".into(), environment.into());
+        let resolved_variables = LocalVariables::default();
+        let mut interpreter = Interpreter::new("".into(), environment.into(), &resolved_variables);
         match interpreter.evaluate(&expression, &mut |_| ()) {
             Ok(FroxValue::Boolean(value)) => value,
             _ => panic!("{:?}", expression)

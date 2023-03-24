@@ -1,4 +1,4 @@
-use std::{fmt::Display, rc::Rc};
+use std::{fmt::Display, rc::Rc, hash::Hash};
 
 use crate::{token::Lexeme, statement::Statement};
 
@@ -130,6 +130,12 @@ impl Expression {
 
     pub fn wrap(self, lexeme: Lexeme) -> MaterializableExpression {
         MaterializableExpression::new(self, lexeme)
+    }
+}
+
+impl Hash for Expression {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
     }
 }
 
