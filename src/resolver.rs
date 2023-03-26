@@ -16,7 +16,8 @@ pub(crate) struct LocalVariables<'a> {
 
 enum FunctionType {
     None,
-    Function
+    Function,
+    Method
 }
 
 impl<'a> Resolver<'a> {
@@ -67,18 +68,7 @@ impl<'a> Resolver<'a> {
                     self.define(&name);
                 }
 
-                let enclosing_function = self.current_function;
-                self.current_function = &FunctionType::Function;
-
-                self.begin_scope();
-                for parameter in parameters.iter() {
-                    self.declare(parameter)?;
-                    self.define(parameter);
-                }
-                self.resolve(body)?;
-                self.end_scope();
-
-                self.current_function = enclosing_function;
+                self.resolve_function(parameters, body, FunctionType::Function)?
             },
             Statement::Print(expression) => self.resolve_expression(expression)?,
             Statement::Return(expression) => match self.current_function {
@@ -91,9 +81,20 @@ impl<'a> Resolver<'a> {
                 self.resolve_expression(condition)?;
                 self.resolve_statement(body)?;
             },
-            Statement::Class(lexeme, _) => {
+            Statement::Class(lexeme, methods) => {
                 self.declare(lexeme)?;
                 self.define(lexeme);
+
+                for method in methods {
+                    let declaration = FunctionType::Method;
+                    match method {
+                        Statement::Function(_, parameters, body) => {
+                            self.resolve_function(parameters, body, declaration);
+                            Ok(())
+                        },
+                        _ => Err(Error::ResolverError(format!("Expected method, but got {:?}", method).to_string(), None))
+                    }?
+                }
             }
         };
         Ok(())
@@ -146,6 +147,22 @@ impl<'a> Resolver<'a> {
                 return Ok(())
             }
         }
+        Ok(())
+    }
+
+    fn resolve_function(&mut self, parameters: &[Lexeme], body: &'a [Statement], function_type: FunctionType) -> Result<()> {
+        let enclosing_function = self.current_function;
+        self.current_function = &FunctionType::Function;
+
+        self.begin_scope();
+        for parameter in parameters.iter() {
+            self.declare(parameter)?;
+            self.define(parameter);
+        }
+        self.resolve(body)?;
+        self.end_scope();
+
+        self.current_function = enclosing_function;
         Ok(())
     }
 

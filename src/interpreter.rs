@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::RefCell};
+use std::{rc::Rc, cell::RefCell, collections::HashMap};
 
 use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue, resolver::LocalVariables, class::Class};
 use crate::error::Result;
@@ -93,7 +93,7 @@ impl<'a> Interpreter<'a> {
     fn execute_function_declaration<F: FnMut(String) -> ()>(&mut self, name: &Option<Lexeme>, parameters: &[Lexeme], body: &[Statement], _print_stream: F) -> Result<()> {
         let name: Rc<str> = name.expect("Function should have a name").materialize(&self.context).into();
         let declared_function = self.declared_function(name, parameters, body);
-        self.environment.borrow_mut().define(declared_function.name().to_string(), FroxValue::Function(declared_function));
+        self.environment.borrow_mut().define(declared_function.name().to_string(), FroxValue::Function(Rc::new(declared_function)));
         Ok(())
     }
 
@@ -111,10 +111,24 @@ impl<'a> Interpreter<'a> {
         Err(Error::ReturnCall(evaluated_value))
     }
 
-    fn execute_class(&mut self, lexeme: &Lexeme, _methods: &[Statement]) -> Result<()> {
+    fn execute_class(&mut self, lexeme: &Lexeme, method_statements: &[Statement]) -> Result<()> {
         let name: Rc<str> = lexeme.materialize(&self.context).into();
         self.environment.borrow_mut().define(name.to_string(), FroxValue::Nil);
-        let class = Class::new(name.clone());
+
+        let mut methods = HashMap::new();
+        for method in method_statements {
+            let declared_method = match method {
+                Statement::Function(function_lexeme, parameters, body) => {
+                    let name: Rc<str> = function_lexeme.expect("Function should have a name").materialize(&self.context).into();
+                    Ok(self.declared_function(name, parameters, body))
+                },
+                _ => Err(Error::InterpreterError(format!("Expected method, but got {:?}", method).to_string()))
+            }?;
+
+            methods.insert(declared_method.name.clone(), Rc::new(declared_method));
+        }
+
+        let class = Class::new(name.clone(), methods);
         self.environment.borrow_mut().assign(name.to_string(), FroxValue::Class(class.into()), lexeme)?;
         Ok(())
     }
@@ -168,8 +182,6 @@ impl<'a> Interpreter<'a> {
     fn assignment<F: FnMut(String) -> ()>(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
         let value = self.evaluate(&expression, print_stream)?;
         let name = lexeme.materialize(&self.context).to_string();
-        println!("{:?}", self.local_variables);
-        println!("assign {:?}", lexeme);
         match self.local_variables.get(lexeme.clone()) {
             Some(distance) => Environment::assign_at(self.environment.clone(), *distance, name, value),
             None => self.globals.borrow_mut().assign(name, value, lexeme)
@@ -207,7 +219,7 @@ impl<'a> Interpreter<'a> {
                 }
                 callable.call(evaluated_arguments, self, print_stream)
             },
-            FroxValue::Class(class) => Ok(FroxValue::Instance(class)),
+            FroxValue::Class(class) => Ok(FroxValue::Instance(Class::instantiate(class).into())),
             _ => Err(Error::InterpreterError("Invalid invocation target".to_string()))
         }
     }
@@ -215,7 +227,7 @@ impl<'a> Interpreter<'a> {
     fn lambda(&mut self, function_declaration: &Statement) -> Result<FroxValue> {
         if let Statement::Function(None, parameters, body) = function_declaration {
             let name = "anonymous".into();
-            return Ok(FroxValue::Function(self.declared_function(name, parameters, body)));
+            return Ok(FroxValue::Function(Rc::new(self.declared_function(name, parameters, body))));
         } else {
             return Err(Error::InterpreterError("Expected lambda".to_string()));
         }

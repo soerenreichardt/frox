@@ -222,6 +222,17 @@ mod tests {
         assert_execution_equals(source, "\"Lettuce\"");
     }
 
+    #[test]
+    fn should_execute_method() {
+        let source = r#"
+        class Bacon { eat() {
+            print "Crunch crunch crunch!"; }
+            }
+            Bacon().eat();
+        "#;
+        assert_execution_equals(source, "\"Crunch crunch crunch!\"")
+    }
+
     fn assert_execution_equals(source: &str, expected: &str) {
         let mut buffer = String::new();
         match FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())) {
