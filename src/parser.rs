@@ -302,6 +302,7 @@ impl Parser {
 
                 match materializable_expression.expression {
                     Expression::Variable(name) => Ok(Expression::Assigment(name, Box::new(value)).wrap(materializable_expression.lexeme.union(&value_lexeme))),
+                    Expression::Get(instance, lexeme) => Ok(Expression::Set(instance, lexeme, Box::new(value)).wrap(materializable_expression.lexeme.union(&value_lexeme))),
                     _ => Err(Error::ParserError("Invalid assignment target".to_string(), Some(token.lexeme)))
                 }
             }
@@ -442,6 +443,12 @@ impl Parser {
         loop {
             match self.token_iterator.peek().map(|token| token.token_type) {
                 Some(TokenType::LeftParen) => expression = self.finish_call(expression)?,
+                Some(TokenType::Dot) => {
+                    self.token_iterator.next();
+                    let token = self.consume(&TokenType::Identifier)?;
+                    let lexeme = expression.lexeme;
+                    expression = Expression::Get(Box::new(expression), token.lexeme).wrap(lexeme.union(&token.lexeme));
+                }
                 _ => break
             }
         }

@@ -114,8 +114,8 @@ impl<'a> Interpreter<'a> {
     fn execute_class(&mut self, lexeme: &Lexeme, _methods: &[Statement]) -> Result<()> {
         let name: Rc<str> = lexeme.materialize(&self.context).into();
         self.environment.borrow_mut().define(name.to_string(), FroxValue::Nil);
-        let class = Class { name: name.clone() };
-        self.environment.borrow_mut().assign(name.to_string(), FroxValue::Class(class), lexeme)?;
+        let class = Class::new(name.clone());
+        self.environment.borrow_mut().assign(name.to_string(), FroxValue::Class(class.into()), lexeme)?;
         Ok(())
     }
 
@@ -152,6 +152,8 @@ impl<'a> Interpreter<'a> {
             Expression::Logical(left, right, operator) => self.logical(left, right, operator, print_stream),
             Expression::Call(callee, _, arguments) => self.call(callee, arguments, print_stream),
             Expression::Lambda(function_declaration) => self.lambda(function_declaration),
+            Expression::Get(instance, lexeme) => self.get(instance, lexeme, print_stream),
+            Expression::Set(instance, lexeme, value) => self.set(instance, lexeme, value, print_stream),
         }.map_err(|error| Error::FroxError(Error::format_interpreter_error(&error, lexeme, &self.context.source)))
     }
 
@@ -216,6 +218,28 @@ impl<'a> Interpreter<'a> {
             return Ok(FroxValue::Function(self.declared_function(name, parameters, body)));
         } else {
             return Err(Error::InterpreterError("Expected lambda".to_string()));
+        }
+    }
+
+    fn get<F: FnMut(String) -> ()>(&mut self, instance: &MaterializableExpression, field: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
+        let instance = self.evaluate(instance, print_stream)?;
+        match instance {
+            FroxValue::Instance(class) => {
+                class.borrow().get(field.materialize(&self.context).into())
+            },
+            _ => Err(Error::InterpreterError(format!("Cannot get field from value of type {}", instance)))
+        }
+    }
+
+    fn set<F: FnMut(String) -> ()>(&mut self, instance: &MaterializableExpression, field: &Lexeme, value: &MaterializableExpression, print_stream: &mut F) -> Result<FroxValue> {
+        let instance = self.evaluate(instance, print_stream)?;
+        match instance {
+            FroxValue::Instance(class) => {
+                let value = self.evaluate(value, print_stream)?;
+                class.borrow_mut().set(field.materialize(&self.context).into(), value.clone());
+                Ok(value)
+            },
+            _ => Err(Error::InterpreterError(format!("Cannot set field for value of type {}", instance)))
         }
     }
 }

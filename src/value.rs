@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::fmt::{Formatter, Display};
+use std::rc::Rc;
 use std::str::FromStr;
 
 use crate::callable::{DeclaredFunction, Clock, Callable};
@@ -13,8 +15,8 @@ pub enum FroxValue {
     Boolean(bool),
     Function(DeclaredFunction),
     Clock(Clock),
-    Class(Class),
-    Instance(Class),
+    Class(Rc<RefCell<Class>>),
+    Instance(Rc<RefCell<Class>>),
     Nil
 }
 
@@ -94,8 +96,8 @@ impl<'a> std::fmt::Debug for FroxValue {
             FroxValue::String(string) => f.write_str(["\"", string.as_str(), "\""].concat().as_str()),
             FroxValue::Function(callable) => f.write_str(format!("fn({})", callable.arity()).as_str()),
             FroxValue::Clock(_) => f.write_str("clock()"),
-            FroxValue::Class(class) => f.write_str(&class.name),
-            FroxValue::Instance(class) => f.write_str(format!("{} instance", class.name).as_str()),
+            FroxValue::Class(class) => f.write_str(&class.borrow().name),
+            FroxValue::Instance(class) => f.write_str(format!("{} instance", class.borrow().name).as_str()),
             FroxValue::Nil => f.write_str("nil")
         }
     }

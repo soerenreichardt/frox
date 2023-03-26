@@ -129,7 +129,12 @@ impl<'a> Resolver<'a> {
             },
             Expression::Grouping(inner) => self.resolve_expression(inner)?,
             Expression::Literal(_) => (),
-            Expression::Lambda(body) => self.resolve_statement(body)?
+            Expression::Lambda(body) => self.resolve_statement(body)?,
+            Expression::Get(instance, _) => self.resolve_expression(instance)?,
+            Expression::Set(instance, _, value) => {
+                self.resolve_expression(value)?;
+                self.resolve_expression(instance)?;
+            },
         }
         Ok(())
     }
