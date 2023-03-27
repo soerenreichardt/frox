@@ -6,7 +6,8 @@ pub(crate) struct Resolver<'a> {
     scopes: Vec<HashMap<String, bool>>,
     context: Context,
     local_variables: LocalVariables<'a>,
-    current_function: &'a FunctionType
+    current_function: &'a FunctionType,
+    current_class: &'a ClassType
 }
 
 #[derive(Default, Debug)]
@@ -20,13 +21,19 @@ enum FunctionType {
     Method
 }
 
+enum ClassType {
+    None,
+    Class
+}
+
 impl<'a> Resolver<'a> {
     pub(crate) fn new(source: Rc<str>) -> Self {
         Resolver { 
             scopes: Vec::new(), 
             context: Context::new(source), 
             local_variables: LocalVariables::default(), 
-            current_function: &FunctionType::None 
+            current_function: &FunctionType::None ,
+            current_class: &ClassType::None
         }
     }
 
@@ -82,6 +89,9 @@ impl<'a> Resolver<'a> {
                 self.resolve_statement(body)?;
             },
             Statement::Class(lexeme, methods) => {
+                let enclosing_class = self.current_class;
+                self.current_class = &ClassType::Class;
+
                 self.declare(lexeme)?;
                 self.define(lexeme);
 
@@ -98,6 +108,8 @@ impl<'a> Resolver<'a> {
                     }?
                 }
                 self.end_scope();
+
+                self.current_class = enclosing_class;
             }
         };
         Ok(())
@@ -139,7 +151,10 @@ impl<'a> Resolver<'a> {
                 self.resolve_expression(value)?;
                 self.resolve_expression(instance)?;
             },
-            Expression::This(lexeme) => self.resolve_local(lexeme.materialize(&self.context).to_string(), lexeme)?,
+            Expression::This(lexeme) => match self.current_class {
+                ClassType::None => return Err(Error::ResolverError("Cannot use 'this' outside of a class".to_string(), Some(*lexeme))),
+                _ => self.resolve_local(lexeme.materialize(&self.context).to_string(), lexeme)?
+            },
         }
         Ok(())
     }
