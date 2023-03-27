@@ -85,16 +85,19 @@ impl<'a> Resolver<'a> {
                 self.declare(lexeme)?;
                 self.define(lexeme);
 
+                self.begin_scope();
+                self.scopes.last_mut().expect("No values present").insert("this".to_string(), true);
                 for method in methods {
                     let declaration = FunctionType::Method;
                     match method {
                         Statement::Function(_, parameters, body) => {
-                            self.resolve_function(parameters, body, declaration);
+                            self.resolve_function(parameters, body, declaration)?;
                             Ok(())
                         },
                         _ => Err(Error::ResolverError(format!("Expected method, but got {:?}", method).to_string(), None))
                     }?
                 }
+                self.end_scope();
             }
         };
         Ok(())
@@ -136,6 +139,7 @@ impl<'a> Resolver<'a> {
                 self.resolve_expression(value)?;
                 self.resolve_expression(instance)?;
             },
+            Expression::This(lexeme) => self.resolve_local(lexeme.materialize(&self.context).to_string(), lexeme)?,
         }
         Ok(())
     }

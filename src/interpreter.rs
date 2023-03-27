@@ -98,7 +98,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn declared_function(&mut self, name: Rc<str>, parameters: &[Lexeme], body: &[Statement]) -> DeclaredFunction {
-        let parameters: Vec<Rc<str>> = parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>();
+        let parameters: Rc<Vec<Rc<str>>> = Rc::new(parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>());
         let body: Rc<Vec<Statement>> = Rc::new(body.to_vec());
         DeclaredFunction { name: name.clone(), parameters, body, closure: self.environment.clone() }
     }
@@ -168,6 +168,7 @@ impl<'a> Interpreter<'a> {
             Expression::Lambda(function_declaration) => self.lambda(function_declaration),
             Expression::Get(instance, lexeme) => self.get(instance, lexeme, print_stream),
             Expression::Set(instance, lexeme, value) => self.set(instance, lexeme, value, print_stream),
+            Expression::This(lexeme) => self.variable(lexeme),
         }.map_err(|error| Error::FroxError(Error::format_interpreter_error(&error, lexeme, &self.context.source)))
     }
 
@@ -236,8 +237,11 @@ impl<'a> Interpreter<'a> {
     fn get<F: FnMut(String) -> ()>(&mut self, instance: &MaterializableExpression, field: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
         let instance = self.evaluate(instance, print_stream)?;
         match instance {
-            FroxValue::Instance(class) => {
-                class.borrow().get(field.materialize(&self.context).into())
+            FroxValue::Instance(instance) => {
+                match instance.borrow().get(field.materialize(&self.context).into())? {
+                    FroxValue::Function(method) => Ok(FroxValue::Function(Rc::new(method.bind(instance.clone())))),
+                    value => Ok(value)
+                }
             },
             _ => Err(Error::InterpreterError(format!("Cannot get field from value of type {}", instance)))
         }

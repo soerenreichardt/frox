@@ -22,12 +22,6 @@ impl Class {
     pub(crate) fn instantiate(class: Rc<Class>) -> Instance {
         Instance::new(class)
     }
-
-    fn find_method(&self, name: Rc<str>) -> Option<FroxValue> {
-        self.methods
-            .get(&name)
-            .map(|function| FroxValue::Function(function.clone()))
-    }
 }
 
 impl Instance {
@@ -43,11 +37,12 @@ impl Instance {
     }
 
     pub(crate) fn get(&self, field_name: Rc<str>) -> Result<FroxValue> {
-        let method = self.class.find_method(field_name.clone());
-        let value = self.fields.get(&field_name).or(method.as_ref());
-        match value {
+        match self.fields.get(&field_name) {
             Some(value) => Ok(value.clone()),
-            None => Err(Error::InterpreterError(format!("Undefined property '{}'", field_name)))
+            None => match self.class.methods.get(&field_name) {
+                Some(method) => Ok(FroxValue::Function(method.clone())),
+                None => Err(Error::InterpreterError(format!("Undefined property '{}'", field_name)))
+            }
         }
     }
 

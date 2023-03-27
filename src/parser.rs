@@ -495,6 +495,7 @@ impl Parser {
                     TokenType::Number => Expression::Literal(LiteralValue::Number(token.lexeme.materialize(&self.context).parse::<f64>().unwrap())).wrap(token.lexeme),
                     TokenType::String => Expression::Literal(LiteralValue::String(self.context.source[token.lexeme.start+1..token.lexeme.end-1].into())).wrap(token.lexeme),
                     TokenType::LeftParen => self.grouping_expression(&token.lexeme)?,
+                    TokenType::This => Expression::This(token.lexeme).wrap(token.lexeme),
                     TokenType::Identifier => Expression::Variable(token.lexeme).wrap(token.lexeme),
                     TokenType::Fun => self.lambda(token.lexeme)?,
                     _ => return Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme)))

@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::{time::UNIX_EPOCH, rc::Rc, fmt::Display};
 
+use crate::class::Instance;
 use crate::interpreter::Interpreter;
 use crate::value::FroxValue;
 use crate::{statement::Statement, environment::Environment};
@@ -17,7 +18,7 @@ pub(crate) trait Callable {
 #[derive(PartialEq, Clone)]
 pub struct DeclaredFunction {
     pub(crate) name: Rc<str>, 
-    pub(crate) parameters: Vec<Rc<str>>,
+    pub(crate) parameters: Rc<Vec<Rc<str>>>,
     pub(crate) body: Rc<Vec<Statement>>,
     pub(crate) closure: Rc<RefCell<Environment>>
 }
@@ -41,6 +42,19 @@ impl Callable for DeclaredFunction {
             Ok(_) => Ok(FroxValue::Nil),
             Err(Error::ReturnCall(return_value)) => Ok(return_value),
             Err(error) => Err(error)
+        }
+    }
+}
+
+impl DeclaredFunction {
+    pub(crate) fn bind(&self, instance: Rc<RefCell<Instance>>) -> DeclaredFunction {
+        let mut env = Environment::new_inner(self.closure.clone());
+        env.define("this".to_string(), FroxValue::Instance(instance));
+        DeclaredFunction { 
+            name: self.name.clone(), 
+            parameters: self.parameters.clone(), 
+            body: self.body.clone(), 
+            closure: env.into()
         }
     }
 }
