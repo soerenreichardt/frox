@@ -20,7 +20,8 @@ pub struct DeclaredFunction {
     pub(crate) name: Rc<str>, 
     pub(crate) parameters: Rc<Vec<Rc<str>>>,
     pub(crate) body: Rc<Vec<Statement>>,
-    pub(crate) closure: Rc<RefCell<Environment>>
+    pub(crate) closure: Rc<RefCell<Environment>>,
+    pub(crate) is_initializer: bool
 }
 
 impl Callable for DeclaredFunction {
@@ -38,10 +39,16 @@ impl Callable for DeclaredFunction {
             environment.define(parameter.to_string(), argument.clone());
         }
 
-        match interpreter.execute_block(&self.body, environment.into(), print_stream) {
-            Ok(_) => Ok(FroxValue::Nil),
-            Err(Error::ReturnCall(return_value)) => Ok(return_value),
-            Err(error) => Err(error)
+        match (self.is_initializer, interpreter.execute_block(&self.body, environment.into(), print_stream)) {
+            (false, Ok(_)) => Ok(FroxValue::Nil),
+            (true, Ok(_)) => Environment::get_at(self.closure.clone(), 0, "this".to_string()),
+            (is_initializer, Err(Error::ReturnCall(return_value))) => {
+                if is_initializer {
+                    return Environment::get_at(self.closure.clone(), 0, "this".to_string());
+                }
+                Ok(return_value)
+            },
+            (_, Err(error)) => Err(error)
         }
     }
 }
@@ -54,7 +61,8 @@ impl DeclaredFunction {
             name: self.name.clone(), 
             parameters: self.parameters.clone(), 
             body: self.body.clone(), 
-            closure: env.into()
+            closure: env.into(),
+            is_initializer: self.is_initializer
         }
     }
 }

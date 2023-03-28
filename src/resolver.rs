@@ -18,6 +18,7 @@ pub(crate) struct LocalVariables<'a> {
 enum FunctionType {
     None,
     Function,
+    Initializer,
     Method
 }
 
@@ -80,6 +81,7 @@ impl<'a> Resolver<'a> {
             Statement::Print(expression) => self.resolve_expression(expression)?,
             Statement::Return(expression) => match self.current_function {
                 FunctionType::None => return Err(Error::ResolverError("Can't return from top-level code".to_string(), None)),
+                FunctionType::Initializer => return Err(Error::ResolverError("Cannot return a value from an initializer".to_string(), None)),
                 _ => if let Some(expression) = expression {
                     self.resolve_expression(expression)?;
                 }
@@ -98,9 +100,14 @@ impl<'a> Resolver<'a> {
                 self.begin_scope();
                 self.scopes.last_mut().expect("No values present").insert("this".to_string(), true);
                 for method in methods {
-                    let declaration = FunctionType::Method;
+                    let mut declaration = FunctionType::Method;
                     match method {
-                        Statement::Function(_, parameters, body) => {
+                        Statement::Function(lexeme, parameters, body) => {
+                            if let Some(lexeme) = lexeme {
+                                if lexeme.materialize(&self.context).eq("init") {
+                                    declaration = FunctionType::Initializer;
+                                }
+                            }
                             self.resolve_function(parameters, body, declaration)?;
                             Ok(())
                         },

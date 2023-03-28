@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::RefCell, collections::HashMap};
 
-use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue, resolver::LocalVariables, class::Class};
+use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue, resolver::LocalVariables, class::{Class, Initializer}};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
@@ -92,15 +92,15 @@ impl<'a> Interpreter<'a> {
 
     fn execute_function_declaration<F: FnMut(String) -> ()>(&mut self, name: &Option<Lexeme>, parameters: &[Lexeme], body: &[Statement], _print_stream: F) -> Result<()> {
         let name: Rc<str> = name.expect("Function should have a name").materialize(&self.context).into();
-        let declared_function = self.declared_function(name, parameters, body);
+        let declared_function = self.declared_function(name, parameters, body, false);
         self.environment.borrow_mut().define(declared_function.name().to_string(), FroxValue::Function(Rc::new(declared_function)));
         Ok(())
     }
 
-    fn declared_function(&mut self, name: Rc<str>, parameters: &[Lexeme], body: &[Statement]) -> DeclaredFunction {
+    fn declared_function(&mut self, name: Rc<str>, parameters: &[Lexeme], body: &[Statement], is_initializer: bool) -> DeclaredFunction {
         let parameters: Rc<Vec<Rc<str>>> = Rc::new(parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>());
         let body: Rc<Vec<Statement>> = Rc::new(body.to_vec());
-        DeclaredFunction { name: name.clone(), parameters, body, closure: self.environment.clone() }
+        DeclaredFunction { name: name.clone(), parameters, body, closure: self.environment.clone(), is_initializer }
     }
 
     fn execute_return<F: FnMut(String) -> ()>(&mut self, value: &Option<MaterializableExpression>, print_stream: &mut F) -> Result<()> {
@@ -120,7 +120,8 @@ impl<'a> Interpreter<'a> {
             let declared_method = match method {
                 Statement::Function(function_lexeme, parameters, body) => {
                     let name: Rc<str> = function_lexeme.expect("Function should have a name").materialize(&self.context).into();
-                    Ok(self.declared_function(name, parameters, body))
+                    let is_initializer = name.as_ref().eq("init");
+                    Ok(self.declared_function(name, parameters, body, is_initializer))
                 },
                 _ => Err(Error::InterpreterError(format!("Expected method, but got {:?}", method).to_string()))
             }?;
@@ -220,7 +221,7 @@ impl<'a> Interpreter<'a> {
                 }
                 callable.call(evaluated_arguments, self, print_stream)
             },
-            FroxValue::Class(class) => Ok(FroxValue::Instance(Class::instantiate(class).into())),
+            FroxValue::Class(class) => Initializer { class: class.clone() }.call(evaluated_arguments, self, print_stream),
             _ => Err(Error::InterpreterError("Invalid invocation target".to_string()))
         }
     }
@@ -228,7 +229,7 @@ impl<'a> Interpreter<'a> {
     fn lambda(&mut self, function_declaration: &Statement) -> Result<FroxValue> {
         if let Statement::Function(None, parameters, body) = function_declaration {
             let name = "anonymous".into();
-            return Ok(FroxValue::Function(Rc::new(self.declared_function(name, parameters, body))));
+            return Ok(FroxValue::Function(Rc::new(self.declared_function(name, parameters, body, false))));
         } else {
             return Err(Error::InterpreterError("Expected lambda".to_string()));
         }

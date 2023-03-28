@@ -225,10 +225,12 @@ mod tests {
     #[test]
     fn should_execute_method() {
         let source = r#"
-        class Bacon { eat() {
-            print "Crunch crunch crunch!"; }
+        class Bacon { 
+            eat() {
+                print "Crunch crunch crunch!"; 
             }
-            Bacon().eat();
+        }
+        Bacon().eat();
         "#;
         assert_execution_equals(source, "\"Crunch crunch crunch!\"")
     }
@@ -245,6 +247,21 @@ mod tests {
         method();
         "#;
         assert_execution_equals(source, "Egotist instance")
+    }
+
+    #[test]
+    fn should_run_constructors() {
+        let source = r#"
+        class Foo {
+            init(bar) {
+                this.bar = bar;
+                print "init";
+                return;
+            }
+        }
+        print Foo(1).bar;
+        "#;
+        assert_execution_equals(source, "\"init\"1")
     }
 
     fn assert_execution_equals(source: &str, expected: &str) {

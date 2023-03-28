@@ -1,11 +1,15 @@
 use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
-use crate::{error::{Result, Error}, value::FroxValue, callable::DeclaredFunction};
+use crate::{error::{Result, Error}, value::FroxValue, callable::{DeclaredFunction, Callable}};
 
 #[derive(PartialEq)]
 pub struct Class {
     pub name: Rc<str>,
     methods: HashMap<Rc<str>, Rc<DeclaredFunction>> 
+}
+
+pub(crate) struct Initializer {
+    pub(crate) class: Rc<Class>
 }
 
 #[derive(PartialEq)]
@@ -18,9 +22,27 @@ impl Class {
     pub(crate) fn new(name: Rc<str>, methods: HashMap<Rc<str>, Rc<DeclaredFunction>>) -> Self {
         Class { name, methods }
     }
+}
 
-    pub(crate) fn instantiate(class: Rc<Class>) -> Instance {
-        Instance::new(class)
+impl Callable for Initializer {
+    fn name(&self) -> Rc<str> {
+        self.class.name.clone()
+    }
+
+    fn arity(&self) -> u8 {
+        match self.class.methods.get("init") {
+            Some(constructor) => constructor.arity(),
+            None => 0
+        }
+    }
+
+    fn call<F: FnMut(String) -> ()>(&self, arguments: Vec<FroxValue>, interpreter: &mut crate::interpreter::Interpreter, print_stream: &mut F) -> Result<FroxValue> {
+        let instance = Rc::new(RefCell::new(Instance::new(self.class.clone())));
+        if let Some(constructor) = self.class.methods.get("init") {
+            constructor.bind(instance.clone()).call(arguments, interpreter, print_stream)?;
+        }
+
+        Ok(FroxValue::Instance(instance.clone()))
     }
 }
 
