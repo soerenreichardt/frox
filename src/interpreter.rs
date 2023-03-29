@@ -52,7 +52,7 @@ impl<'a> Interpreter<'a> {
             Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(self.environment.clone()).into(), print_stream),
             Statement::If(condition, then_branch, else_branch) => self.execute_condition(condition, then_branch, else_branch, print_stream),
             Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream),
-            Statement::Function(name, parameters, body) => self.execute_function_declaration(name, parameters, body, print_stream),
+            Statement::Function(name, parameters, body, function_kind) => self.execute_function_declaration(name, parameters, body, print_stream),
             Statement::Return(value) => self.execute_return(value, print_stream),
             Statement::Class(lexeme, methods) => self.execute_class(lexeme, methods)
         }
@@ -118,7 +118,7 @@ impl<'a> Interpreter<'a> {
         let mut methods = HashMap::new();
         for method in method_statements {
             let declared_method = match method {
-                Statement::Function(function_lexeme, parameters, body) => {
+                Statement::Function(function_lexeme, parameters, body, function_kind) => {
                     let name: Rc<str> = function_lexeme.expect("Function should have a name").materialize(&self.context).into();
                     let is_initializer = name.as_ref().eq("init");
                     Ok(self.declared_function(name, parameters, body, is_initializer))
@@ -227,7 +227,7 @@ impl<'a> Interpreter<'a> {
     }
 
     fn lambda(&mut self, function_declaration: &Statement) -> Result<FroxValue> {
-        if let Statement::Function(None, parameters, body) = function_declaration {
+        if let Statement::Function(None, parameters, body, function_kind) = function_declaration {
             let name = "anonymous".into();
             return Ok(FroxValue::Function(Rc::new(self.declared_function(name, parameters, body, false))));
         } else {
@@ -242,6 +242,12 @@ impl<'a> Interpreter<'a> {
                 match instance.borrow().get(field.materialize(&self.context).into())? {
                     FroxValue::Function(method) => Ok(FroxValue::Function(Rc::new(method.bind(instance.clone())))),
                     value => Ok(value)
+                }
+            }
+            FroxValue::Class(class) => {
+                match class.methods.get(field.materialize(&self.context)) {
+                    Some(static_method) => Ok(FroxValue::Function(static_method.clone())),
+                    None => Err(Error::InterpreterError(format!("No static method with name `{}` was found", field.materialize(&self.context))))
                 }
             },
             _ => Err(Error::InterpreterError(format!("Cannot get field from value of type {}", instance)))

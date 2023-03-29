@@ -70,7 +70,7 @@ impl<'a> Resolver<'a> {
                     self.resolve_statement(else_statement)?;
                 }
             },
-            Statement::Function(name, parameters, body) => {
+            Statement::Function(name, parameters, body, functino_kind) => {
                 if let Some(name) = name {
                     self.declare(&name)?;
                     self.define(&name);
@@ -102,7 +102,7 @@ impl<'a> Resolver<'a> {
                 for method in methods {
                     let mut declaration = FunctionType::Method;
                     match method {
-                        Statement::Function(lexeme, parameters, body) => {
+                        Statement::Function(lexeme, parameters, body, function_kind) => {
                             if let Some(lexeme) = lexeme {
                                 if lexeme.materialize(&self.context).eq("init") {
                                     declaration = FunctionType::Initializer;

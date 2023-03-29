@@ -5,7 +5,7 @@ use crate::{error::{Result, Error}, value::FroxValue, callable::{DeclaredFunctio
 #[derive(PartialEq)]
 pub struct Class {
     pub name: Rc<str>,
-    methods: HashMap<Rc<str>, Rc<DeclaredFunction>> 
+    pub(crate) methods: HashMap<Rc<str>, Rc<DeclaredFunction>> 
 }
 
 pub(crate) struct Initializer {

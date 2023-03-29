@@ -264,6 +264,19 @@ mod tests {
         assert_execution_equals(source, "\"init\"1")
     }
 
+    #[test]
+    fn should_execute_static_methods() {
+        let source = r#"
+        class Math {
+            class square(n) {
+                return n * n;
+            }
+        }
+        print Math.square(3);
+        "#;
+        assert_execution_equals(source, "9")
+    }
+
     fn assert_execution_equals(source: &str, expected: &str) {
         let mut buffer = String::new();
         match FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())) {
