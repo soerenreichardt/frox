@@ -90,12 +90,24 @@ impl<'a> Resolver<'a> {
                 self.resolve_expression(condition)?;
                 self.resolve_statement(body)?;
             },
-            Statement::Class(lexeme, methods) => {
+            Statement::Class(lexeme, superclass, methods) => {
                 let enclosing_class = self.current_class;
                 self.current_class = &ClassType::Class;
 
                 self.declare(lexeme)?;
                 self.define(lexeme);
+
+                match superclass {
+                    Some(superclass) if superclass.lexeme.materialize(&self.context).eq(lexeme.materialize(&self.context)) =>
+                        Err(Error::ResolverError("A class cannot inherit from itself".to_string(), Some(superclass.lexeme))),
+                    Some(superclass) => {
+                        self.resolve_expression(&superclass);
+                        self.begin_scope();
+                        self.scopes.last_mut().expect("No values present").insert("super".to_string(), true);
+                        Ok(())
+                    },
+                    None => Ok(())
+                }?;
 
                 self.begin_scope();
                 self.scopes.last_mut().expect("No values present").insert("this".to_string(), true);
@@ -115,6 +127,8 @@ impl<'a> Resolver<'a> {
                     }?
                 }
                 self.end_scope();
+
+                superclass.as_ref().map(|_| self.end_scope());
 
                 self.current_class = enclosing_class;
             }
@@ -162,6 +176,7 @@ impl<'a> Resolver<'a> {
                 ClassType::None => return Err(Error::ResolverError("Cannot use 'this' outside of a class".to_string(), Some(*lexeme))),
                 _ => self.resolve_local(lexeme.materialize(&self.context).to_string(), lexeme)?
             },
+            Expression::Super(lexeme, method) => self.resolve_local(lexeme.materialize(&self.context).to_string(), method)?
         }
         Ok(())
     }

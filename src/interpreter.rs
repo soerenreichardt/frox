@@ -54,7 +54,7 @@ impl<'a> Interpreter<'a> {
             Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream),
             Statement::Function(name, parameters, body, function_kind) => self.execute_function_declaration(name, parameters, body, print_stream),
             Statement::Return(value) => self.execute_return(value, print_stream),
-            Statement::Class(lexeme, methods) => self.execute_class(lexeme, methods)
+            Statement::Class(lexeme, superclass, methods) => self.execute_class(lexeme, superclass, methods, print_stream),
         }
     }
 
@@ -111,9 +111,26 @@ impl<'a> Interpreter<'a> {
         Err(Error::ReturnCall(evaluated_value))
     }
 
-    fn execute_class(&mut self, lexeme: &Lexeme, method_statements: &[Statement]) -> Result<()> {
+    fn execute_class<F: FnMut(String) -> ()>(&mut self, lexeme: &Lexeme, superclass: &Option<MaterializableExpression>, method_statements: &[Statement], print_stream: &mut F) -> Result<()> {
         let name: Rc<str> = lexeme.materialize(&self.context).into();
+
+        let superclass = match superclass {
+            Some(superclass) => match self.evaluate(superclass, print_stream)? {
+                FroxValue::Class(class) => Some(class),
+                _ => return Err(Error::InterpreterError("Superclass must be a class".to_string()))
+            },
+            None => None
+        };
+
         self.environment.borrow_mut().define(name.to_string(), FroxValue::Nil);
+
+        match &superclass {
+            Some(superclass) => {
+                self.environment = Environment::new_inner(self.environment.clone()).into();
+                self.environment.borrow_mut().define("super".to_string(), FroxValue::Class(superclass.clone()))
+            },
+            None => ()
+        }
 
         let mut methods = HashMap::new();
         for method in method_statements {
@@ -129,7 +146,16 @@ impl<'a> Interpreter<'a> {
             methods.insert(declared_method.name.clone(), Rc::new(declared_method));
         }
 
-        let class = Class::new(name.clone(), methods);
+        let class = Class::new(name.clone(), superclass.clone(), methods);
+
+        match &superclass {
+            Some(_) => {
+                let enclosing = self.environment.borrow().parent.clone();
+                self.environment = enclosing.expect("Should have parent");
+            },
+            None => ()
+        }
+
         self.environment.borrow_mut().assign(name.to_string(), FroxValue::Class(class.into()), lexeme)?;
         Ok(())
     }
@@ -170,6 +196,25 @@ impl<'a> Interpreter<'a> {
             Expression::Get(instance, lexeme) => self.get(instance, lexeme, print_stream),
             Expression::Set(instance, lexeme, value) => self.set(instance, lexeme, value, print_stream),
             Expression::This(lexeme) => self.variable(lexeme),
+            Expression::Super(lexeme, method) => {
+                println!("{:?}", self.local_variables);
+                println!("{:?}", method);
+                let distance = self.local_variables.get(*method).expect("Should be local variable");
+                let superclass = match Environment::get_at(self.environment.clone(), *distance, "super".to_string())? {
+                    FroxValue::Class(class) => class.clone(),
+                    _ => return Err(Error::InterpreterError("Expected value of type class".to_string()))  
+                };
+                let object = match Environment::get_at(self.environment.clone(), *distance - 1, "this".to_string())? {
+                    FroxValue::Instance(instance) => instance,
+                    _ => return Err(Error::InterpreterError("Expected value of type instance".to_string()))
+                };
+                let method = superclass.find_method(method.materialize(&self.context));
+
+                match method {
+                    Some(method) => Ok(FroxValue::Function(method.bind(object).into())),
+                    None => Err(Error::InterpreterError("Undefined property".to_string()))
+                }
+            }
         }.map_err(|error| Error::FroxError(Error::format_interpreter_error(&error, lexeme, &self.context.source)))
     }
 
@@ -245,7 +290,7 @@ impl<'a> Interpreter<'a> {
                 }
             }
             FroxValue::Class(class) => {
-                match class.methods.get(field.materialize(&self.context)) {
+                match class.find_method(field.materialize(&self.context)) {
                     Some(static_method) => Ok(FroxValue::Function(static_method.clone())),
                     None => Err(Error::InterpreterError(format!("No static method with name `{}` was found", field.materialize(&self.context))))
                 }

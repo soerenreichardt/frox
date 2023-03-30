@@ -15,7 +15,8 @@ pub enum Expression {
     Lambda(Box<Statement>),
     Get(Box<MaterializableExpression>, Lexeme),
     Set(Box<MaterializableExpression>, Lexeme, Box<MaterializableExpression>),
-    This(Lexeme)
+    This(Lexeme),
+    Super(Lexeme, Lexeme)
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -119,6 +120,7 @@ impl Display for Expression {
             Self::Get(instance, name) => f.write_str(format!("{}.{:?}", instance, name).as_str()),
             Self::Set(instance, name, value) => f.write_str(format!("{}.{:?} = {}", instance, name, value).as_str()),
             Self::This(_) => f.write_str("this"),
+            Self::Super(_, method) => f.write_str(format!("super.{:?}", method).as_str())
         }
     }
 }

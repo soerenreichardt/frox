@@ -277,6 +277,44 @@ mod tests {
         assert_execution_equals(source, "9")
     }
 
+    #[test]
+    fn should_execut_method_from_superclass() {
+        let source = r#"
+        class Doughnut { 
+            cook() {
+                print "Fry until golden brown."; 
+            }
+        }
+        class BostonCream < Doughnut {} 
+        BostonCream().cook();
+        "#;
+
+        assert_execution_equals(source, "\"Fry until golden brown.\"")
+    }
+
+    #[test]
+    fn should_resolve_super_correctly() {
+        let source = r#"
+        class A { 
+            method() {
+                print "A method"; 
+            }
+        }
+        class B < A { 
+            method() {
+                print "B method"; 
+            }
+            test() {
+                super.method(); 
+            }
+        }
+        class C < B {} 
+        C().test();
+        "#;
+
+        assert_execution_equals(source, "\"A method\"")
+    }
+
     fn assert_execution_equals(source: &str, expected: &str) {
         let mut buffer = String::new();
         match FroxRunner::new().run_with_print_stream(source.into(), |string| buffer.push_str(string.as_str())) {

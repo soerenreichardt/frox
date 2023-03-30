@@ -1,4 +1,4 @@
-use crate::{expression::MaterializableExpression, token::Lexeme, parser::FunctionKind};
+use crate::{expression::{MaterializableExpression}, token::Lexeme, parser::FunctionKind};
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Statement {
@@ -10,5 +10,5 @@ pub enum Statement {
     While(MaterializableExpression, Box<Statement>),
     Function(Option<Lexeme>, Vec<Lexeme>, Vec<Statement>, FunctionKind),
     Return(Option<MaterializableExpression>),
-    Class(Lexeme, Vec<Statement>)
+    Class(Lexeme, Option<MaterializableExpression>, Vec<Statement>)
 }

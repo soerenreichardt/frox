@@ -11,7 +11,7 @@ use crate::value::FroxValue;
 #[derive(Clone, PartialEq)]
 pub(crate) struct Environment {
     values: HashMap<String, FroxValue>,
-    parent: Option<Rc<RefCell<Environment>>>
+    pub(crate) parent: Option<Rc<RefCell<Environment>>>
 }
 
 impl Environment {

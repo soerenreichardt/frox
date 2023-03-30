@@ -86,6 +86,16 @@ impl Parser {
     fn class_declaration(&mut self) -> Result<Statement> {
         self.token_iterator.next();
         let name = self.consume(&TokenType::Identifier)?;
+
+        let supclass = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Less) => {
+                self.token_iterator.next();
+                let superclass_name = self.consume(&TokenType::Identifier)?;
+                Some(Expression::Variable(superclass_name.lexeme).wrap(superclass_name.lexeme))
+            },
+            _ => None
+        };
+
         self.consume(&TokenType::LeftBrace)?;
 
         let mut methods = Vec::new();
@@ -107,7 +117,7 @@ impl Parser {
 
         self.consume(&TokenType::RightBrace)?;
         
-        Ok(Statement::Class(name.lexeme, methods))
+        Ok(Statement::Class(name.lexeme, supclass, methods))
     }
 
     fn static_method(&mut self) -> Result<Statement> {
@@ -509,6 +519,13 @@ impl Parser {
                     TokenType::This => Expression::This(token.lexeme).wrap(token.lexeme),
                     TokenType::Identifier => Expression::Variable(token.lexeme).wrap(token.lexeme),
                     TokenType::Fun => self.lambda(token.lexeme)?,
+                    TokenType::Super => {
+                        self.consume(&TokenType::Dot);
+                        Expression::Super(
+                            token.lexeme, 
+                            self.consume(&TokenType::Identifier)?.lexeme
+                        ).wrap(token.lexeme)
+                    },
                     _ => return Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme)))
                 };
                 Ok(expression)
@@ -731,6 +748,7 @@ mod tests {
         assert_eq!(
             Statement::Class(
                 Lexeme::new(6, 9), 
+                None,
                 vec![
                     Statement::Function(
                         Some(Lexeme::new(12, 13)), 

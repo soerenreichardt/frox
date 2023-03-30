@@ -5,7 +5,8 @@ use crate::{error::{Result, Error}, value::FroxValue, callable::{DeclaredFunctio
 #[derive(PartialEq)]
 pub struct Class {
     pub name: Rc<str>,
-    pub(crate) methods: HashMap<Rc<str>, Rc<DeclaredFunction>> 
+    superclass: Option<Rc<Class>>,
+    methods: HashMap<Rc<str>, Rc<DeclaredFunction>> 
 }
 
 pub(crate) struct Initializer {
@@ -19,8 +20,18 @@ pub struct Instance {
 }
 
 impl Class {
-    pub(crate) fn new(name: Rc<str>, methods: HashMap<Rc<str>, Rc<DeclaredFunction>>) -> Self {
-        Class { name, methods }
+    pub(crate) fn new(name: Rc<str>, superclass: Option<Rc<Class>>, methods: HashMap<Rc<str>, Rc<DeclaredFunction>>) -> Self {
+        Class { name, superclass, methods }
+    }
+
+    pub(crate) fn find_method(&self, name: &str) -> Option<&Rc<DeclaredFunction>> {
+        match self.methods.get(name) {
+            Some(method) => Some(method),
+            None => match &self.superclass {
+                Some(superclass) => superclass.find_method(name),
+                None => None
+            }
+        }
     }
 }
 
@@ -30,7 +41,7 @@ impl Callable for Initializer {
     }
 
     fn arity(&self) -> u8 {
-        match self.class.methods.get("init") {
+        match self.class.find_method("init") {
             Some(constructor) => constructor.arity(),
             None => 0
         }
@@ -38,7 +49,7 @@ impl Callable for Initializer {
 
     fn call<F: FnMut(String) -> ()>(&self, arguments: Vec<FroxValue>, interpreter: &mut crate::interpreter::Interpreter, print_stream: &mut F) -> Result<FroxValue> {
         let instance = Rc::new(RefCell::new(Instance::new(self.class.clone())));
-        if let Some(constructor) = self.class.methods.get("init") {
+        if let Some(constructor) = self.class.find_method("init") {
             constructor.bind(instance.clone()).call(arguments, interpreter, print_stream)?;
         }
 
@@ -61,7 +72,7 @@ impl Instance {
     pub(crate) fn get(&self, field_name: Rc<str>) -> Result<FroxValue> {
         match self.fields.get(&field_name) {
             Some(value) => Ok(value.clone()),
-            None => match self.class.methods.get(&field_name) {
+            None => match self.class.find_method(&field_name) {
                 Some(method) => Ok(FroxValue::Function(method.clone())),
                 None => Err(Error::InterpreterError(format!("Undefined property '{}'", field_name)))
             }
