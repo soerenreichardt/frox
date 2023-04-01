@@ -12,7 +12,11 @@ pub enum Expression {
     Logical(Box<MaterializableExpression>, Box<MaterializableExpression>, LogicalOperator),
     Unary(UnaryOperator, Box<MaterializableExpression>),
     Variable(Lexeme),
-    Lambda(Box<Statement>)
+    Lambda(Box<Statement>),
+    Get(Box<MaterializableExpression>, Lexeme),
+    Set(Box<MaterializableExpression>, Lexeme, Box<MaterializableExpression>),
+    This(Lexeme),
+    Super(Lexeme, Lexeme)
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -112,7 +116,11 @@ impl Display for Expression {
             Self::Lambda(parameters) => f.write_str(format!("fn ({:?})", parameters).as_str()),
             Self::Literal(literal_value) => f.write_str(literal_value.to_string().as_str()),
             Self::Logical(lhs, rhs, op) => f.write_str(format!("{} {} {}", lhs.to_string(), rhs.to_string(), op.to_string()).as_str()),
-            Self::Variable(name) => f.write_str(format!("var {:?}", name).as_str())
+            Self::Variable(name) => f.write_str(format!("var {:?}", name).as_str()),
+            Self::Get(instance, name) => f.write_str(format!("{}.{:?}", instance, name).as_str()),
+            Self::Set(instance, name, value) => f.write_str(format!("{}.{:?} = {}", instance, name, value).as_str()),
+            Self::This(_) => f.write_str("this"),
+            Self::Super(_, method) => f.write_str(format!("super.{:?}", method).as_str())
         }
     }
 }

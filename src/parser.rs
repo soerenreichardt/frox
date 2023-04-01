@@ -18,6 +18,14 @@ struct TokenIterator {
     tokens: IntoIter<Token>,
 }
 
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub enum FunctionKind {
+    Function,
+    Method,
+    Lambda,
+    StaticMethod
+}
+
 impl Default for TokenIterator {
     fn default() -> Self {
         Self { tokens: Vec::new().into_iter() }
@@ -62,7 +70,12 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Statement> {
         match self.token_iterator.peek() {
-            Some(Token { token_type: TokenType::Fun, ..}) => self.function(false),
+            Some(Token { token_type: TokenType::Class, ..}) => self.class_declaration(),
+            Some(Token { token_type: TokenType::Fun, ..}) => {
+                self.token_iterator.next();
+                let name = self.consume(&TokenType::Identifier)?.lexeme;
+                self.function_declaration(Some(name), FunctionKind::Function)
+            },
             Some(Token { token_type: TokenType::Var, .. }) => self.variable_declaration(),
             _ => self.statement()
         }
@@ -70,14 +83,51 @@ impl Parser {
         // todo: synchronize
     }
 
-    fn function(&mut self, lambda: bool) -> Result<Statement> {
-        
-        let mut name = None;
-        if !lambda {
-            self.token_iterator.next();
-            name = Some(self.consume(&TokenType::Identifier)?.lexeme);
+    fn class_declaration(&mut self) -> Result<Statement> {
+        self.token_iterator.next();
+        let name = self.consume(&TokenType::Identifier)?;
+
+        let supclass = match self.token_iterator.peek().map(|token| token.token_type) {
+            Some(TokenType::Less) => {
+                self.token_iterator.next();
+                let superclass_name = self.consume(&TokenType::Identifier)?;
+                Some(Expression::Variable(superclass_name.lexeme).wrap(superclass_name.lexeme))
+            },
+            _ => None
+        };
+
+        self.consume(&TokenType::LeftBrace)?;
+
+        let mut methods = Vec::new();
+        loop {
+            match self.token_iterator.peek().map(|token| token.token_type) {
+                Some(TokenType::RightBrace) | None => break,
+                _ => {
+                    let method =  match self.token_iterator.peek().map(|token| token.token_type) {
+                        Some(TokenType::Class) => self.static_method()?,
+                        _ => {
+                            let name = Some(self.consume(&TokenType::Identifier)?.lexeme);
+                            self.function_declaration(name, FunctionKind::Method)?
+                        }
+                    };
+                    methods.push(method);
+                }
+            }
         }
 
+        self.consume(&TokenType::RightBrace)?;
+        
+        Ok(Statement::Class(name.lexeme, supclass, methods))
+    }
+
+    fn static_method(&mut self) -> Result<Statement> {
+        println!("static method");
+        self.token_iterator.next();
+        let name = self.consume(&TokenType::Identifier)?;
+        self.function_declaration(Some(name.lexeme), FunctionKind::StaticMethod)
+    }
+
+    fn function_declaration(&mut self, name: Option<Lexeme>, function_kind: FunctionKind) -> Result<Statement> {
         self.consume(&TokenType::LeftParen)?;
         let mut parameters = Vec::new();
         if let Some(TokenType::Identifier) = self.token_iterator.peek().map(|token| token.token_type) {
@@ -102,7 +152,7 @@ impl Parser {
         self.consume(&TokenType::LeftBrace)?;
         let body = self.block()?;
         
-        Ok(Statement::Function(name, parameters, body))
+        Ok(Statement::Function(name, parameters, body, function_kind))
     }
 
     fn variable_declaration(&mut self) -> Result<Statement> {
@@ -273,6 +323,7 @@ impl Parser {
 
                 match materializable_expression.expression {
                     Expression::Variable(name) => Ok(Expression::Assigment(name, Box::new(value)).wrap(materializable_expression.lexeme.union(&value_lexeme))),
+                    Expression::Get(instance, lexeme) => Ok(Expression::Set(instance, lexeme, Box::new(value)).wrap(materializable_expression.lexeme.union(&value_lexeme))),
                     _ => Err(Error::ParserError("Invalid assignment target".to_string(), Some(token.lexeme)))
                 }
             }
@@ -413,6 +464,12 @@ impl Parser {
         loop {
             match self.token_iterator.peek().map(|token| token.token_type) {
                 Some(TokenType::LeftParen) => expression = self.finish_call(expression)?,
+                Some(TokenType::Dot) => {
+                    self.token_iterator.next();
+                    let token = self.consume(&TokenType::Identifier)?;
+                    let lexeme = expression.lexeme;
+                    expression = Expression::Get(Box::new(expression), token.lexeme).wrap(lexeme.union(&token.lexeme));
+                }
                 _ => break
             }
         }
@@ -459,8 +516,16 @@ impl Parser {
                     TokenType::Number => Expression::Literal(LiteralValue::Number(token.lexeme.materialize(&self.context).parse::<f64>().unwrap())).wrap(token.lexeme),
                     TokenType::String => Expression::Literal(LiteralValue::String(self.context.source[token.lexeme.start+1..token.lexeme.end-1].into())).wrap(token.lexeme),
                     TokenType::LeftParen => self.grouping_expression(&token.lexeme)?,
+                    TokenType::This => Expression::This(token.lexeme).wrap(token.lexeme),
                     TokenType::Identifier => Expression::Variable(token.lexeme).wrap(token.lexeme),
                     TokenType::Fun => self.lambda(token.lexeme)?,
+                    TokenType::Super => {
+                        self.consume(&TokenType::Dot);
+                        Expression::Super(
+                            token.lexeme, 
+                            self.consume(&TokenType::Identifier)?.lexeme
+                        ).wrap(token.lexeme)
+                    },
                     _ => return Err(Error::ParserError("Could not match expression".to_string(), Some(token.lexeme)))
                 };
                 Ok(expression)
@@ -470,7 +535,7 @@ impl Parser {
     }
 
     fn lambda(&mut self, lexeme: Lexeme) -> Result<MaterializableExpression> {
-        Ok(Expression::Lambda(Box::new(self.function(true)?)).wrap(lexeme))
+        Ok(Expression::Lambda(Box::new(self.function_declaration(None, FunctionKind::Lambda)?)).wrap(lexeme))
     }
 
     fn grouping_expression(&mut self, lexeme: &Lexeme) -> Result<MaterializableExpression> {
@@ -657,6 +722,41 @@ mod tests {
                         Box::new(Expression::Literal(LiteralValue::Number(2.0)).wrap(Lexeme::new(6, 7)))
                     ]
                 ).wrap(Lexeme::new(0, 8))
+            ),
+            *statements.get(0).unwrap()
+        )
+    }
+
+    #[test]
+    fn should_parse_class() {
+        let tokens = vec![
+            Token::new(TokenType::Class, (0, 5), 1),
+            Token::new(TokenType::Identifier, (6, 9), 1),
+            Token::new(TokenType::LeftBrace, (10, 11), 1),
+            Token::new(TokenType::Identifier, (12, 13), 1),
+            Token::new(TokenType::LeftParen, (13, 14), 1),
+            Token::new(TokenType::RightParen, (14, 15), 1),
+            Token::new(TokenType::LeftBrace, (16, 17), 1),
+            Token::new(TokenType::Print, (18, 23), 1),
+            Token::new(TokenType::Number, (24, 25), 1),
+            Token::new(TokenType::Semicolon, (25, 26), 1),
+            Token::new(TokenType::RightBrace, (27, 28), 1),
+            Token::new(TokenType::RightBrace, (29, 30), 1),
+        ];
+        let mut parser = Parser::new("class foo { a() { print 0; } }".into());
+        let statements = parser.parse(tokens).unwrap();
+        assert_eq!(
+            Statement::Class(
+                Lexeme::new(6, 9), 
+                None,
+                vec![
+                    Statement::Function(
+                        Some(Lexeme::new(12, 13)), 
+                        Vec::new(), 
+                        vec![Statement::Print( Expression::Literal(LiteralValue::Number(0.0)).wrap(Lexeme::new(24, 25)) ) ],
+                        FunctionKind::Method
+                    )
+                ]
             ),
             *statements.get(0).unwrap()
         )

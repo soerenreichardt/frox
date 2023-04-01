@@ -6,7 +6,8 @@ pub(crate) struct Resolver<'a> {
     scopes: Vec<HashMap<String, bool>>,
     context: Context,
     local_variables: LocalVariables<'a>,
-    current_function: &'a FunctionType
+    current_function: &'a FunctionType,
+    current_class: &'a ClassType
 }
 
 #[derive(Default, Debug)]
@@ -16,7 +17,14 @@ pub(crate) struct LocalVariables<'a> {
 
 enum FunctionType {
     None,
-    Function
+    Function,
+    Initializer,
+    Method
+}
+
+enum ClassType {
+    None,
+    Class
 }
 
 impl<'a> Resolver<'a> {
@@ -25,7 +33,8 @@ impl<'a> Resolver<'a> {
             scopes: Vec::new(), 
             context: Context::new(source), 
             local_variables: LocalVariables::default(), 
-            current_function: &FunctionType::None 
+            current_function: &FunctionType::None ,
+            current_class: &ClassType::None
         }
     }
 
@@ -61,28 +70,18 @@ impl<'a> Resolver<'a> {
                     self.resolve_statement(else_statement)?;
                 }
             },
-            Statement::Function(name, parameters, body) => {
+            Statement::Function(name, parameters, body, functino_kind) => {
                 if let Some(name) = name {
                     self.declare(&name)?;
                     self.define(&name);
                 }
 
-                let enclosing_function = self.current_function;
-                self.current_function = &FunctionType::Function;
-
-                self.begin_scope();
-                for parameter in parameters.iter() {
-                    self.declare(parameter)?;
-                    self.define(parameter);
-                }
-                self.resolve(body)?;
-                self.end_scope();
-
-                self.current_function = enclosing_function;
+                self.resolve_function(parameters, body, FunctionType::Function)?
             },
             Statement::Print(expression) => self.resolve_expression(expression)?,
             Statement::Return(expression) => match self.current_function {
                 FunctionType::None => return Err(Error::ResolverError("Can't return from top-level code".to_string(), None)),
+                FunctionType::Initializer => return Err(Error::ResolverError("Cannot return a value from an initializer".to_string(), None)),
                 _ => if let Some(expression) = expression {
                     self.resolve_expression(expression)?;
                 }
@@ -90,6 +89,48 @@ impl<'a> Resolver<'a> {
             Statement::While(condition, body) => {
                 self.resolve_expression(condition)?;
                 self.resolve_statement(body)?;
+            },
+            Statement::Class(lexeme, superclass, methods) => {
+                let enclosing_class = self.current_class;
+                self.current_class = &ClassType::Class;
+
+                self.declare(lexeme)?;
+                self.define(lexeme);
+
+                match superclass {
+                    Some(superclass) if superclass.lexeme.materialize(&self.context).eq(lexeme.materialize(&self.context)) =>
+                        Err(Error::ResolverError("A class cannot inherit from itself".to_string(), Some(superclass.lexeme))),
+                    Some(superclass) => {
+                        self.resolve_expression(&superclass);
+                        self.begin_scope();
+                        self.scopes.last_mut().expect("No values present").insert("super".to_string(), true);
+                        Ok(())
+                    },
+                    None => Ok(())
+                }?;
+
+                self.begin_scope();
+                self.scopes.last_mut().expect("No values present").insert("this".to_string(), true);
+                for method in methods {
+                    let mut declaration = FunctionType::Method;
+                    match method {
+                        Statement::Function(lexeme, parameters, body, function_kind) => {
+                            if let Some(lexeme) = lexeme {
+                                if lexeme.materialize(&self.context).eq("init") {
+                                    declaration = FunctionType::Initializer;
+                                }
+                            }
+                            self.resolve_function(parameters, body, declaration)?;
+                            Ok(())
+                        },
+                        _ => Err(Error::ResolverError(format!("Expected method, but got {:?}", method).to_string(), None))
+                    }?
+                }
+                self.end_scope();
+
+                superclass.as_ref().map(|_| self.end_scope());
+
+                self.current_class = enclosing_class;
             }
         };
         Ok(())
@@ -125,7 +166,17 @@ impl<'a> Resolver<'a> {
             },
             Expression::Grouping(inner) => self.resolve_expression(inner)?,
             Expression::Literal(_) => (),
-            Expression::Lambda(body) => self.resolve_statement(body)?
+            Expression::Lambda(body) => self.resolve_statement(body)?,
+            Expression::Get(instance, _) => self.resolve_expression(instance)?,
+            Expression::Set(instance, _, value) => {
+                self.resolve_expression(value)?;
+                self.resolve_expression(instance)?;
+            },
+            Expression::This(lexeme) => match self.current_class {
+                ClassType::None => return Err(Error::ResolverError("Cannot use 'this' outside of a class".to_string(), Some(*lexeme))),
+                _ => self.resolve_local(lexeme.materialize(&self.context).to_string(), lexeme)?
+            },
+            Expression::Super(lexeme, method) => self.resolve_local(lexeme.materialize(&self.context).to_string(), method)?
         }
         Ok(())
     }
@@ -137,6 +188,22 @@ impl<'a> Resolver<'a> {
                 return Ok(())
             }
         }
+        Ok(())
+    }
+
+    fn resolve_function(&mut self, parameters: &[Lexeme], body: &'a [Statement], function_type: FunctionType) -> Result<()> {
+        let enclosing_function = self.current_function;
+        self.current_function = &FunctionType::Function;
+
+        self.begin_scope();
+        for parameter in parameters.iter() {
+            self.declare(parameter)?;
+            self.define(parameter);
+        }
+        self.resolve(body)?;
+        self.end_scope();
+
+        self.current_function = enclosing_function;
         Ok(())
     }
 

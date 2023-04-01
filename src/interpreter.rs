@@ -1,6 +1,6 @@
-use std::{rc::Rc, cell::RefCell};
+use std::{rc::Rc, cell::RefCell, collections::HashMap};
 
-use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue, resolver::LocalVariables};
+use crate::{context::Context, expression::{Expression, UnaryOperator, BinaryOperator, MaterializableExpression, LogicalOperator}, error::Error, token::Lexeme, statement::Statement, environment::{Environment}, Materializable, callable::{Callable, DeclaredFunction, Clock}, value::FroxValue, resolver::LocalVariables, class::{Class, Initializer}};
 use crate::error::Result;
 
 pub struct Interpreter<'a> {
@@ -52,8 +52,9 @@ impl<'a> Interpreter<'a> {
             Statement::Block(statements) => self.execute_block(statements, Environment::new_inner(self.environment.clone()).into(), print_stream),
             Statement::If(condition, then_branch, else_branch) => self.execute_condition(condition, then_branch, else_branch, print_stream),
             Statement::While(condition, body) => self.execute_while_loop(condition, body, print_stream),
-            Statement::Function(name, parameters, body) => self.execute_function_declaration(name, parameters, body, print_stream),
-            Statement::Return(value) => self.execute_return(value, print_stream)
+            Statement::Function(name, parameters, body, function_kind) => self.execute_function_declaration(name, parameters, body, print_stream),
+            Statement::Return(value) => self.execute_return(value, print_stream),
+            Statement::Class(lexeme, superclass, methods) => self.execute_class(lexeme, superclass, methods, print_stream),
         }
     }
 
@@ -91,15 +92,15 @@ impl<'a> Interpreter<'a> {
 
     fn execute_function_declaration<F: FnMut(String) -> ()>(&mut self, name: &Option<Lexeme>, parameters: &[Lexeme], body: &[Statement], _print_stream: F) -> Result<()> {
         let name: Rc<str> = name.expect("Function should have a name").materialize(&self.context).into();
-        let declared_function = self.declared_function(name, parameters, body);
-        self.environment.borrow_mut().define(declared_function.name().to_string(), FroxValue::Function(declared_function));
+        let declared_function = self.declared_function(name, parameters, body, false);
+        self.environment.borrow_mut().define(declared_function.name().to_string(), FroxValue::Function(Rc::new(declared_function)));
         Ok(())
     }
 
-    fn declared_function(&mut self, name: Rc<str>, parameters: &[Lexeme], body: &[Statement]) -> DeclaredFunction {
-        let parameters: Vec<Rc<str>> = parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>();
+    fn declared_function(&mut self, name: Rc<str>, parameters: &[Lexeme], body: &[Statement], is_initializer: bool) -> DeclaredFunction {
+        let parameters: Rc<Vec<Rc<str>>> = Rc::new(parameters.iter().map(|lexeme| lexeme.materialize(&self.context).into()).collect::<Vec<_>>());
         let body: Rc<Vec<Statement>> = Rc::new(body.to_vec());
-        DeclaredFunction { name: name.clone(), parameters, body, closure: self.environment.clone() }
+        DeclaredFunction { name: name.clone(), parameters, body, closure: self.environment.clone(), is_initializer }
     }
 
     fn execute_return<F: FnMut(String) -> ()>(&mut self, value: &Option<MaterializableExpression>, print_stream: &mut F) -> Result<()> {
@@ -108,6 +109,55 @@ impl<'a> Interpreter<'a> {
             _ => FroxValue::Nil
         };
         Err(Error::ReturnCall(evaluated_value))
+    }
+
+    fn execute_class<F: FnMut(String) -> ()>(&mut self, lexeme: &Lexeme, superclass: &Option<MaterializableExpression>, method_statements: &[Statement], print_stream: &mut F) -> Result<()> {
+        let name: Rc<str> = lexeme.materialize(&self.context).into();
+
+        let superclass = match superclass {
+            Some(superclass) => match self.evaluate(superclass, print_stream)? {
+                FroxValue::Class(class) => Some(class),
+                _ => return Err(Error::InterpreterError("Superclass must be a class".to_string()))
+            },
+            None => None
+        };
+
+        self.environment.borrow_mut().define(name.to_string(), FroxValue::Nil);
+
+        match &superclass {
+            Some(superclass) => {
+                self.environment = Environment::new_inner(self.environment.clone()).into();
+                self.environment.borrow_mut().define("super".to_string(), FroxValue::Class(superclass.clone()))
+            },
+            None => ()
+        }
+
+        let mut methods = HashMap::new();
+        for method in method_statements {
+            let declared_method = match method {
+                Statement::Function(function_lexeme, parameters, body, function_kind) => {
+                    let name: Rc<str> = function_lexeme.expect("Function should have a name").materialize(&self.context).into();
+                    let is_initializer = name.as_ref().eq("init");
+                    Ok(self.declared_function(name, parameters, body, is_initializer))
+                },
+                _ => Err(Error::InterpreterError(format!("Expected method, but got {:?}", method).to_string()))
+            }?;
+
+            methods.insert(declared_method.name.clone(), Rc::new(declared_method));
+        }
+
+        let class = Class::new(name.clone(), superclass.clone(), methods);
+
+        match &superclass {
+            Some(_) => {
+                let enclosing = self.environment.borrow().parent.clone();
+                self.environment = enclosing.expect("Should have parent");
+            },
+            None => ()
+        }
+
+        self.environment.borrow_mut().assign(name.to_string(), FroxValue::Class(class.into()), lexeme)?;
+        Ok(())
     }
 
     pub(crate) fn evaluate<F: FnMut(String) -> ()>(&mut self, MaterializableExpression { expression, lexeme }: &MaterializableExpression, print_stream: &mut F) -> Result<FroxValue> {
@@ -143,6 +193,28 @@ impl<'a> Interpreter<'a> {
             Expression::Logical(left, right, operator) => self.logical(left, right, operator, print_stream),
             Expression::Call(callee, _, arguments) => self.call(callee, arguments, print_stream),
             Expression::Lambda(function_declaration) => self.lambda(function_declaration),
+            Expression::Get(instance, lexeme) => self.get(instance, lexeme, print_stream),
+            Expression::Set(instance, lexeme, value) => self.set(instance, lexeme, value, print_stream),
+            Expression::This(lexeme) => self.variable(lexeme),
+            Expression::Super(lexeme, method) => {
+                println!("{:?}", self.local_variables);
+                println!("{:?}", method);
+                let distance = self.local_variables.get(*method).expect("Should be local variable");
+                let superclass = match Environment::get_at(self.environment.clone(), *distance, "super".to_string())? {
+                    FroxValue::Class(class) => class.clone(),
+                    _ => return Err(Error::InterpreterError("Expected value of type class".to_string()))  
+                };
+                let object = match Environment::get_at(self.environment.clone(), *distance - 1, "this".to_string())? {
+                    FroxValue::Instance(instance) => instance,
+                    _ => return Err(Error::InterpreterError("Expected value of type instance".to_string()))
+                };
+                let method = superclass.find_method(method.materialize(&self.context));
+
+                match method {
+                    Some(method) => Ok(FroxValue::Function(method.bind(object).into())),
+                    None => Err(Error::InterpreterError("Undefined property".to_string()))
+                }
+            }
         }.map_err(|error| Error::FroxError(Error::format_interpreter_error(&error, lexeme, &self.context.source)))
     }
 
@@ -157,8 +229,6 @@ impl<'a> Interpreter<'a> {
     fn assignment<F: FnMut(String) -> ()>(&mut self, expression: &MaterializableExpression, lexeme: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
         let value = self.evaluate(&expression, print_stream)?;
         let name = lexeme.materialize(&self.context).to_string();
-        println!("{:?}", self.local_variables);
-        println!("assign {:?}", lexeme);
         match self.local_variables.get(lexeme.clone()) {
             Some(distance) => Environment::assign_at(self.environment.clone(), *distance, name, value),
             None => self.globals.borrow_mut().assign(name, value, lexeme)
@@ -196,16 +266,48 @@ impl<'a> Interpreter<'a> {
                 }
                 callable.call(evaluated_arguments, self, print_stream)
             },
+            FroxValue::Class(class) => Initializer { class: class.clone() }.call(evaluated_arguments, self, print_stream),
             _ => Err(Error::InterpreterError("Invalid invocation target".to_string()))
         }
     }
 
     fn lambda(&mut self, function_declaration: &Statement) -> Result<FroxValue> {
-        if let Statement::Function(None, parameters, body) = function_declaration {
+        if let Statement::Function(None, parameters, body, function_kind) = function_declaration {
             let name = "anonymous".into();
-            return Ok(FroxValue::Function(self.declared_function(name, parameters, body)));
+            return Ok(FroxValue::Function(Rc::new(self.declared_function(name, parameters, body, false))));
         } else {
             return Err(Error::InterpreterError("Expected lambda".to_string()));
+        }
+    }
+
+    fn get<F: FnMut(String) -> ()>(&mut self, instance: &MaterializableExpression, field: &Lexeme, print_stream: &mut F) -> Result<FroxValue> {
+        let instance = self.evaluate(instance, print_stream)?;
+        match instance {
+            FroxValue::Instance(instance) => {
+                match instance.borrow().get(field.materialize(&self.context).into())? {
+                    FroxValue::Function(method) => Ok(FroxValue::Function(Rc::new(method.bind(instance.clone())))),
+                    value => Ok(value)
+                }
+            }
+            FroxValue::Class(class) => {
+                match class.find_method(field.materialize(&self.context)) {
+                    Some(static_method) => Ok(FroxValue::Function(static_method.clone())),
+                    None => Err(Error::InterpreterError(format!("No static method with name `{}` was found", field.materialize(&self.context))))
+                }
+            },
+            _ => Err(Error::InterpreterError(format!("Cannot get field from value of type {}", instance)))
+        }
+    }
+
+    fn set<F: FnMut(String) -> ()>(&mut self, instance: &MaterializableExpression, field: &Lexeme, value: &MaterializableExpression, print_stream: &mut F) -> Result<FroxValue> {
+        let instance = self.evaluate(instance, print_stream)?;
+        match instance {
+            FroxValue::Instance(class) => {
+                let value = self.evaluate(value, print_stream)?;
+                class.borrow_mut().set(field.materialize(&self.context).into(), value.clone());
+                Ok(value)
+            },
+            _ => Err(Error::InterpreterError(format!("Cannot set field for value of type {}", instance)))
         }
     }
 }

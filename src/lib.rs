@@ -11,6 +11,7 @@ mod context;
 mod environment;
 mod error;
 mod resolver;
+mod class;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -185,6 +186,133 @@ mod tests {
         }
         "#;
         assert_execution_equals(source, "\"global\"\"global\"");
+    }
+
+    #[test]
+    fn should_print_class() {
+        let source = r#"
+        class Foo {
+            bar() {
+                print "baz";
+            }
+        }
+        print Foo;
+        "#;
+        assert_execution_equals(source, "Foo");
+    }
+
+    #[test]
+    fn should_print_instance() {
+        let source = r#"
+        class Bagel {}
+        var bagel = Bagel();
+        print bagel;
+        "#;
+        assert_execution_equals(source, "Bagel instance");
+    }
+
+    #[test]
+    fn should_get_and_set_on_instances() {
+        let source = r#"
+        class Bagel {}
+        var bagel = Bagel();
+        bagel.content = "Lettuce";
+        print bagel.content;
+        "#;
+        assert_execution_equals(source, "\"Lettuce\"");
+    }
+
+    #[test]
+    fn should_execute_method() {
+        let source = r#"
+        class Bacon { 
+            eat() {
+                print "Crunch crunch crunch!"; 
+            }
+        }
+        Bacon().eat();
+        "#;
+        assert_execution_equals(source, "\"Crunch crunch crunch!\"")
+    }
+
+    #[test]
+    fn should_evaluate_this() {
+        let source = r#"
+        class Egotist { 
+            speak() {
+                print this; 
+            }
+        }
+        var method = Egotist().speak; 
+        method();
+        "#;
+        assert_execution_equals(source, "Egotist instance")
+    }
+
+    #[test]
+    fn should_run_constructors() {
+        let source = r#"
+        class Foo {
+            init(bar) {
+                this.bar = bar;
+                print "init";
+                return;
+            }
+        }
+        print Foo(1).bar;
+        "#;
+        assert_execution_equals(source, "\"init\"1")
+    }
+
+    #[test]
+    fn should_execute_static_methods() {
+        let source = r#"
+        class Math {
+            class square(n) {
+                return n * n;
+            }
+        }
+        print Math.square(3);
+        "#;
+        assert_execution_equals(source, "9")
+    }
+
+    #[test]
+    fn should_execut_method_from_superclass() {
+        let source = r#"
+        class Doughnut { 
+            cook() {
+                print "Fry until golden brown."; 
+            }
+        }
+        class BostonCream < Doughnut {} 
+        BostonCream().cook();
+        "#;
+
+        assert_execution_equals(source, "\"Fry until golden brown.\"")
+    }
+
+    #[test]
+    fn should_resolve_super_correctly() {
+        let source = r#"
+        class A { 
+            method() {
+                print "A method"; 
+            }
+        }
+        class B < A { 
+            method() {
+                print "B method"; 
+            }
+            test() {
+                super.method(); 
+            }
+        }
+        class C < B {} 
+        C().test();
+        "#;
+
+        assert_execution_equals(source, "\"A method\"")
     }
 
     fn assert_execution_equals(source: &str, expected: &str) {
